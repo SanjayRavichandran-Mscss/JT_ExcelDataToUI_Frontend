@@ -3,22 +3,21 @@ const router = express.Router();
 
 const {
   testSheet,
-  createSheet,
-  getAllSheets,
-  getSheetById,
   createRecord,
   createMultipleRecords,
   getAllRecords,
   updateRecord,
   deleteRecord,
-  getRecordByTcNo
+  getRecordByTcNo,
+  createCertificate,
+  getAllCertificates,
+  getCertificateById,
+  updateCertificate,
+  deleteCertificate
 } = require('../controllers/sheetController');
 
 // ─── Sheet Routes ────────────────────────────────────────────────
 router.get('/test', testSheet);                     // GET /api/sheet/test
-router.post('/create', createSheet);                // POST /api/sheet/create
-router.get('/sheets', getAllSheets);                // GET /api/sheet/sheets   ← all sheets
-router.get('/sheets/:id', getSheetById);            // GET /api/sheet/sheets/:id
 
 // ─── Record Routes ───────────────────────────────────────────────
 router.post('/records', createRecord);              // POST   /api/sheet/records
@@ -29,5 +28,22 @@ router.delete('/records/:id', deleteRecord);        // DELETE /api/sheet/records
 
 
 router.get('/records/by-tc', getRecordByTcNo);          // GET /api/sheet/records/by-tc?tc_no=ABC123
+
+
+
+
+
+
+
+
+
+
+
+// Individual Route Definitions
+router.post('/create-certificate', createCertificate);
+router.get('/get-all-certificates', getAllCertificates);
+router.get('/get-certificate/:id', getCertificateById);
+router.put('/update-certificate/:id', updateCertificate);
+router.delete('/delete-certificate/:id', deleteCertificate);
 
 module.exports = router;

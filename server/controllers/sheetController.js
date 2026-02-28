@@ -22,162 +22,6 @@ exports.testSheet = async (req, res) => {
   }
 };
 
-
-
-
-
-exports.createSheet = async (req, res) => {
-  const {
-    sheetName,
-    customerName,
-    poNumber,
-    poDate,
-    certNo,
-    certDate,
-    deliveryNoteNo,
-    deliveryDate,
-    formatNo,
-    crNo,
-  } = req.body;
-
-  // Required fields validation
-  if (!sheetName?.trim() || !customerName?.trim()) {
-    return res.status(400).json({
-      success: false,
-      message: 'Sheet name and Customer name are required',
-    });
-  }
-
-  try {
-    const [result] = await db.query(
-      `INSERT INTO sheet_details (
-        sheet_name, 
-        customer_name, 
-        po_number, 
-        po_date, 
-        cert_no, 
-        cert_date,
-        delivery_note_no, 
-        delivery_date, 
-        format_no, 
-        cr_no
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        sheetName.trim(),
-        customerName.trim(),
-        poNumber || null,
-        poDate || null,
-        certNo || null,
-        certDate || null,
-        deliveryNoteNo || null,
-        deliveryDate || null,
-        formatNo || null,
-        crNo || null,
-      ]
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Sheet created successfully',
-      sheetId: result.insertId,
-    });
-  } catch (error) {
-    console.error('Error creating sheet:', error);
-
-    if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({
-        success: false,
-        message: 'A sheet with this name already exists',
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create sheet',
-      error: error.message,
-    });
-  }
-};
-
-
-
-
-
-exports.getAllSheets = async (req, res) => {
-  try {
-    const [rows] = await db.query(`
-      SELECT 
-        id,
-        sheet_name,
-        customer_name,
-        po_number,
-        po_date,
-        cert_no,
-        cert_date,
-        delivery_note_no,
-        delivery_date,
-        format_no,
-        cr_no,
-        created_at
-      FROM sheet_details
-      ORDER BY created_at DESC
-    `);
-
-    res.status(200).json({
-      success: true,
-      count: rows.length,
-      sheets: rows,
-    });
-  } catch (error) {
-    console.error('Error fetching sheets:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch sheets',
-      error: error.message,
-    });
-  }
-};
-
-// Optional: Get single sheet by ID (bonus)
-exports.getSheetById = async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const [rows] = await db.query('SELECT * FROM sheet_details WHERE id = ?', [id]);
-
-    if (rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Sheet not found',
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      sheet: rows[0],
-    });
-  } catch (error) {
-    console.error('Error fetching sheet:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error',
-      error: error.message,
-    });
-  }
-};
-
-
-
-
-
-
-
-
-
-
-
-
-
 exports.createRecord = async (req, res) => {
   try {
     const {
@@ -383,17 +227,6 @@ exports.deleteRecord = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
-
-
-
-
-
 // Fetch single record by tc_no (using query param)
 exports.getRecordByTcNo = async (req, res) => {
   try {
@@ -436,4 +269,287 @@ exports.getRecordByTcNo = async (req, res) => {
       error: error.message
     });
   }
+};
+
+
+
+
+
+
+
+
+
+
+exports.createCertificate = async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const {
+            cert_no,
+            cert_date,
+            delivery_note_no,
+            delivery_date,
+            customer_name,
+            po_no,
+            po_date,
+            items = [],
+            signature = 0   // default to 0 (none)
+        } = req.body;
+
+        // 1. Insert header
+        const [headerResult] = await connection.query(
+            `INSERT INTO certificate_details 
+             (cert_no, cert_date, delivery_note_no, delivery_date, customer_name, po_no, po_date, signature)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [cert_no, cert_date, delivery_note_no, delivery_date, customer_name, po_no, po_date, signature]
+        );
+
+        const certificate_id = headerResult.insertId;
+
+        // 2. Insert items if any
+        if (items.length > 0) {
+            const itemValues = items.map(item => [
+                certificate_id,
+                item.po_lineitem_no,
+                item.item_size,
+                item.raw_material_size,
+                item.tc_no,
+                item.traceability_no,
+                item.qty_pcs,
+                item.material_grade,
+                item.c,
+                item.cr,
+                item.ni,
+                item.mo,
+                item.mn,
+                item.si,
+                item.s,
+                item.p
+            ]);
+
+            await connection.query(
+                `INSERT INTO certificate_records (
+                    certificate_id, po_lineitem_no, item_size, raw_material_size,
+                    tc_no, traceability_no, qty_pcs, material_grade,
+                    c, cr, ni, mo, mn, si, s, p
+                ) VALUES ?`,
+                [itemValues]
+            );
+        }
+
+        await connection.commit();
+        res.status(201).json({
+            success: true,
+            message: "Certificate created",
+            certificateId: certificate_id
+        });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Create certificate error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    } finally {
+        connection.release();
+    }
+};
+
+exports.updateCertificate = async (req, res) => {
+    const { id } = req.params;
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const {
+            cert_no,
+            cert_date,
+            delivery_note_no,
+            delivery_date,
+            customer_name,
+            po_no,
+            po_date,
+            signature = 0,
+            items = [],           // array of objects from frontend
+        } = req.body;
+
+        // 1. Update header (always)
+        await connection.query(
+            `UPDATE certificate_details 
+             SET cert_no       = ?,
+                 cert_date     = ?,
+                 delivery_note_no = ?,
+                 delivery_date = ?,
+                 customer_name = ?,
+                 po_no         = ?,
+                 po_date       = ?,
+                 signature     = ?
+             WHERE id = ?`,
+            [cert_no, cert_date, delivery_note_no, delivery_date, customer_name, po_no, po_date, signature, id]
+        );
+
+        // 2. Get current items from DB (to know what to delete/update/insert)
+        const [existingItems] = await connection.query(
+            `SELECT id FROM certificate_records WHERE certificate_id = ?`,
+            [id]
+        );
+
+        const existingIds = new Set(existingItems.map(row => row.id));
+
+        // 3. Process incoming items
+        for (const item of items) {
+            if (item.id) {
+                // Update existing record
+                await connection.query(
+                    `UPDATE certificate_records 
+                     SET po_lineitem_no    = ?,
+                         item_size         = ?,
+                         raw_material_size = ?,
+                         tc_no             = ?,
+                         traceability_no   = ?,
+                         qty_pcs           = ?,
+                         material_grade    = ?,
+                         c                 = ?,
+                         cr                = ?,
+                         ni                = ?,
+                         mo                = ?,
+                         mn                = ?,
+                         si                = ?,
+                         s                 = ?,
+                         p                 = ?
+                     WHERE id = ? AND certificate_id = ?`,
+                    [
+                        item.po_lineitem_no || null,
+                        item.item_size || null,
+                        item.raw_material_size || null,
+                        item.tc_no || null,
+                        item.traceability_no || null,
+                        item.qty_pcs || null,
+                        item.material_grade || null,
+                        item.c || null,
+                        item.cr || null,
+                        item.ni || null,
+                        item.mo || null,
+                        item.mn || null,
+                        item.si || null,
+                        item.s || null,
+                        item.p || null,
+                        item.id,
+                        id
+                    ]
+                );
+
+                existingIds.delete(item.id); // mark as kept
+            } else {
+                // Insert new item
+                await connection.query(
+                    `INSERT INTO certificate_records (
+                        certificate_id, po_lineitem_no, item_size, raw_material_size,
+                        tc_no, traceability_no, qty_pcs, material_grade,
+                        c, cr, ni, mo, mn, si, s, p
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        id,
+                        item.po_lineitem_no || null,
+                        item.item_size || null,
+                        item.raw_material_size || null,
+                        item.tc_no || null,
+                        item.traceability_no || null,
+                        item.qty_pcs || null,
+                        item.material_grade || null,
+                        item.c || null,
+                        item.cr || null,
+                        item.ni || null,
+                        item.mo || null,
+                        item.mn || null,
+                        item.si || null,
+                        item.s || null,
+                        item.p || null
+                    ]
+                );
+            }
+        }
+
+        // 4. Delete items that were removed (still in existingIds)
+        if (existingIds.size > 0) {
+            const idsToDelete = Array.from(existingIds);
+            await connection.query(
+                `DELETE FROM certificate_records 
+                 WHERE id IN (${idsToDelete.map(() => '?').join(',')}) 
+                 AND certificate_id = ?`,
+                [...idsToDelete, id]
+            );
+        }
+
+        await connection.commit();
+        res.status(200).json({ success: true, message: "Certificate updated successfully" });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Update certificate error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    } finally {
+        connection.release();
+    }
+};
+
+exports.getAllCertificates = async (req, res) => {
+    try {
+        const [rows] = await db.query(`
+            SELECT h.*, COUNT(r.id) as item_count 
+            FROM certificate_details h 
+            LEFT JOIN certificate_records r ON h.id = r.certificate_id 
+            GROUP BY h.id 
+            ORDER BY h.created_at DESC
+        `);
+        res.status(200).json({ success: true, certificates: rows });
+    } catch (error) {
+        console.error('Get all certificates error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+exports.getCertificateById = async (req, res) => {
+    try {
+        const [headers] = await db.query(
+            "SELECT * FROM certificate_details WHERE id = ?",
+            [req.params.id]
+        );
+
+        if (headers.length === 0) {
+            return res.status(404).json({ success: false, message: "Certificate not found" });
+        }
+
+        const [items] = await db.query(
+            "SELECT * FROM certificate_records WHERE certificate_id = ?",
+            [req.params.id]
+        );
+
+        res.status(200).json({
+            success: true,
+            data: {
+                ...headers[0],
+                items
+            }
+        });
+    } catch (error) {
+        console.error('Get certificate by id error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+exports.deleteCertificate = async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Optional: also delete related records
+        await db.query("DELETE FROM certificate_records WHERE certificate_id = ?", [id]);
+        const [result] = await db.query("DELETE FROM certificate_details WHERE id = ?", [id]);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: "Certificate not found" });
+        }
+
+        res.status(200).json({ success: true, message: "Certificate deleted successfully" });
+    } catch (error) {
+        console.error('Delete certificate error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 };
