@@ -1,17 +1,476 @@
+// import React, { useState, useRef } from 'react';
+// import * as XLSX from 'xlsx';
+// import { Download, Save } from 'lucide-react';
+// import jsPDF from 'jspdf';
+// import html2canvas from 'html2canvas';
+// import logo from './Assets/logo.png';
+
+// // Import Signatures
+// import sign1 from './Assets/Signatures/sign1.png';
+// import sign2 from './Assets/Signatures/sign2.png';
+
+// const CreateNewSheet = () => {
+//   const [multiSheetData, setMultiSheetData] = useState([]);
+//   const [fileName, setFileName] = useState('');
+//   const [loading, setLoading] = useState(false);
+//   const [submitLoading, setSubmitLoading] = useState(false);
+//   const [selectedSign, setSelectedSign] = useState('none');
+//   const certificateRef = useRef(null);
+//   const fileInputRef = useRef(null);
+
+//   const getTodayDate = () => {
+//     const today = new Date();
+//     const day = today.getDate().toString().padStart(2, '0');
+//     const month = today.toLocaleString('default', { month: 'short' });
+//     const year = today.getFullYear().toString().slice(-2);
+//     return `${day}-${month}-${year}`;
+//   };
+
+//   const todayDate = getTodayDate();
+
+//   const formatExcelDate = (val) => {
+//     if (typeof val !== 'number' || val < 30000 || val > 60000) return val;
+//     const days = Math.floor(val - 25569);
+//     const date = new Date(days * 86400 * 1000);
+//     const dd = date.getUTCDate().toString().padStart(2, '0');
+//     const month = date.toLocaleString('default', { month: 'short' });
+//     const yy = date.getUTCFullYear().toString().slice(-2);
+//     return `${dd}-${month}-${yy}`;
+//   };
+
+//   const extractFromFirstSheet = (wb) => {
+//     const sheetName = wb.SheetNames[0];
+//     const ws = wb.Sheets[sheetName];
+//     const get = (ref) => {
+//       const cell = ws[ref];
+//       if (!cell) return null;
+//       if (cell.t === 'n' && cell.v > 30000 && cell.v < 60000) return formatExcelDate(cell.v);
+//       return cell.v ?? null;
+//     };
+
+//     const headers = {
+//       formatNo: 'Format No. : ICCL/QC/R/14, Rev 01, Date: 01/04/2024',
+//       crNo: 'C.R. 2055012479',
+//       companyTitleEn: 'Instrumentation & Controls Co. Ltd. (ICCL).',
+//       companyTitleAr: 'شركة الآلات الدقيقة والتحكم المحدودة',
+//       address: 'Lot #56, Block #02, Section G, Support Industries, Jubail 2, P.O. Box No. 11300, Jubail – 31961 KSA',
+//       customerName: get('B4') || get('C4') || get('B3') || 'Flowserve Abahsain Flow Control Co Ltd',
+//       deliveryNoteNo: get('A9') || '-',
+//       deliveryDate: get('C9') || '-',
+//       poNo: get('D9') || '-',
+//       poDate: get('F9') || '-',
+//       certNo: '505TC/02/2026' // Default or based on logic
+//     };
+
+//     let headerRow = -1;
+//     let descColIndex = -1;
+//     let jobColIndex = -1;
+//     let qtyColIndex = -1;
+
+//     const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:ZZ200');
+
+//     for (let r = range.s.r; r <= range.e.r && r < 60; r++) {
+//       let foundHeader = false;
+//       for (let c = 0; c < 20; c++) {
+//         const val = String(get(XLSX.utils.encode_cell({ r, c })) || '').toUpperCase();
+//         if (val.includes('DESCRIPTION')) { descColIndex = c; foundHeader = true; }
+//         if (val.includes('JOB NO')) { jobColIndex = c; }
+//         if (val.includes('QTY')) { qtyColIndex = c; }
+//       }
+//       if (foundHeader) { headerRow = r; break; }
+//     }
+
+//     let items = [];
+//     if (headerRow !== -1) {
+//       for (let r = headerRow + 1; r <= range.e.r; r++) {
+//         const poLiValue = get(XLSX.utils.encode_cell({ r, c: 0 }));
+//         const isNumeric = poLiValue !== null && !isNaN(parseFloat(poLiValue)) && isFinite(poLiValue);
+//         if (!isNumeric) continue;
+
+//         items.push({
+//           poLi: String(poLiValue).trim(),
+//           itemSize: descColIndex >= 0 ? String(get(XLSX.utils.encode_cell({ r, c: descColIndex })) || '').trim() : '',
+//           traceability: jobColIndex >= 0 ? String(get(XLSX.utils.encode_cell({ r, c: jobColIndex })) || '').trim() : '',
+//           rawMtlSize: '',
+//           tcNo: '',
+//           C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '',
+//           qty: qtyColIndex >= 0 ? String(get(XLSX.utils.encode_cell({ r, c: qtyColIndex })) || '').trim() : '',
+//           matlConfTo: '',
+//         });
+//       }
+//     }
+//     return { headers, items };
+//   };
+
+//   const processFile = (file) => {
+//     if (!file) return;
+//     setFileName(file.name);
+//     const reader = new FileReader();
+//     reader.onload = (e) => {
+//       try {
+//         const wb = XLSX.read(e.target.result, { type: 'array' });
+//         const data = extractFromFirstSheet(wb);
+//         setMultiSheetData([data]);
+//       } catch (err) { console.error('Error reading Excel', err); }
+//     };
+//     reader.readAsArrayBuffer(file);
+//   };
+
+//   const handleTcNoChange = async (sheetIndex, itemIndex, tcNoValue) => {
+//     const updatedData = [...multiSheetData];
+//     updatedData[sheetIndex].items[itemIndex].tcNo = tcNoValue;
+
+//     if (!tcNoValue.trim()) {
+//       updatedData[sheetIndex].items[itemIndex] = {
+//         ...updatedData[sheetIndex].items[itemIndex],
+//         rawMtlSize: '', C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', matlConfTo: ''
+//       };
+//       setMultiSheetData(updatedData);
+//       return;
+//     }
+
+//     setMultiSheetData(updatedData);
+
+//     try {
+//       const res = await fetch(`http://localhost:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
+//       const data = await res.json();
+
+//       if (data.success && data.record) {
+//         const finalData = [...multiSheetData];
+//         const record = data.record;
+//         finalData[sheetIndex].items[itemIndex] = {
+//           ...finalData[sheetIndex].items[itemIndex],
+//           rawMtlSize: record.size || '',
+//           C: record.c || '', Cr: record.cr || '', Ni: record.ni || '', Mo: record.mo || '',
+//           Mn: record.mn || '', Si: record.si || '', S: record.s || '', P: record.p || '',
+//           matlConfTo: record.material_grade || '',
+//         };
+//         setMultiSheetData(finalData);
+//       } else {
+//         const finalData = [...multiSheetData];
+//         finalData[sheetIndex].items[itemIndex] = {
+//           ...finalData[sheetIndex].items[itemIndex],
+//           rawMtlSize: '', C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', matlConfTo: ''
+//         };
+//         setMultiSheetData(finalData);
+//       }
+//     } catch (err) {
+//       console.error(err);
+//     }
+//   };
+
+//   // --- NEW SUBMIT FUNCTION ---
+//   const handleSubmitCertificate = async () => {
+//     if (multiSheetData.length === 0) return;
+
+//     setSubmitLoading(true);
+//     const data = multiSheetData[0];
+
+//     const payload = {
+//       cert_no: data.headers.certNo,
+//       cert_date: todayDate,
+//       delivery_note_no: data.headers.deliveryNoteNo,
+//       delivery_date: data.headers.deliveryDate,
+//       customer_name: data.headers.customerName,
+//       po_no: data.headers.poNo,
+//       po_date: data.headers.poDate,
+//       items: data.items.map(item => ({
+//         po_lineitem_no: item.poLi,
+//         item_size: item.itemSize,
+//         raw_material_size: item.rawMtlSize,
+//         tc_no: item.tcNo,
+//         traceability_no: item.traceability,
+//         qty_pcs: item.qty,
+//         material_grade: item.matlConfTo,
+//         c: item.C,
+//         cr: item.Cr,
+//         ni: item.Ni,
+//         mo: item.Mo,
+//         mn: item.Mn,
+//         si: item.Si,
+//         s: item.S,
+//         p: item.P
+//       }))
+//     };
+
+//     try {
+//       const response = await fetch('http://localhost:5000/api/sheet/create-certificate', {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify(payload)
+//       });
+
+//       const result = await response.json();
+//       if (result.success) {
+//         alert('Certificate stored in database successfully!');
+//       } else {
+//         alert('Failed to store: ' + result.error);
+//       }
+//     } catch (error) {
+//       console.error('Submit error:', error);
+//       alert('Network error while saving certificate');
+//     } finally {
+//       setSubmitLoading(false);
+//     }
+//   };
+
+//   const downloadAsPDF = async () => {
+//     if (!certificateRef.current) return;
+//     setLoading(true);
+//     try {
+//       const canvas = await html2canvas(certificateRef.current, { scale: 2.5, useCORS: true });
+//       const imgData = canvas.toDataURL('image/png');
+//       const pdf = new jsPDF('p', 'mm', 'a4');
+//       const width = pdf.internal.pageSize.getWidth();
+//       const height = (canvas.height * width) / canvas.width;
+//       pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+//       pdf.save(`MTR_${fileName || 'Report'}.pdf`);
+//     } catch (err) { console.error(err); }
+//     finally { setLoading(false); }
+//   };
+
+//   const styles = {
+//     body: { fontFamily: 'Arial, sans-serif', fontSize: '11px', color: '#000' },
+//     topNav: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 40px', background: '#f8f9fa', borderBottom: '1px solid #ddd' },
+//     reportContainer: { width: '1100px', margin: '20px auto', border: '2px solid #000', backgroundColor: 'white' },
+//     table: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
+//     cell: { border: '1px solid #000', padding: '4px 2px', textAlign: 'center', verticalAlign: 'middle', wordWrap: 'break-word' },
+//     bold: { fontWeight: 'bold' },
+//     textLeft: { textAlign: 'left', paddingLeft: '10px' },
+//     textRight: { textAlign: 'right', paddingRight: '8px' },
+//     arabic: { fontSize: '18px', fontWeight: 'bold', direction: 'rtl', margin: '0 5px' },
+//     companyTitle: { fontSize: '18px', fontWeight: 'bold' },
+//     address: { fontWeight: 'normal', fontSize: '9px', marginTop: '2px', display: 'block' },
+//     nestedTable: { border: 'none', width: '100%', height: '100%', borderCollapse: 'collapse' },
+//     nestedCell: { border: 'none', padding: '10px 5px', borderLeft: '1px solid #000', textAlign: 'left' },
+//     input: { width: '100%', fontSize: '12px', border: 'none', textAlign: 'center', fontWeight: 'bold', outline: 'none', background: 'transparent' },
+//     radioLabel: { marginLeft: '15px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' },
+//     signatureImg: { width: '120px', display: 'block', margin: '10px auto 0 auto' },
+//     submitBtn: { padding: '10px 25px', cursor: 'pointer', background: '#28a745', color: '#fff', marginLeft: '10px', borderRadius: '4px', border: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center' }
+//   };
+
+//   const hData = multiSheetData[0]?.headers;
+
+//   return (
+//     <div style={styles.body}>
+//       <div style={styles.topNav}>
+//         <div style={{ display: 'flex', alignItems: 'center' }}>
+//           <input type="file" ref={fileInputRef} onChange={(e) => processFile(e.target.files[0])} style={{ display: 'none' }} />
+//           <button onClick={() => fileInputRef.current.click()} style={{ padding: '10px 20px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc' }}>
+//             {fileName ? fileName : "Upload Excel"}
+//           </button>
+
+//           {/* SUBMIT BUTTON: Only enabled if data is present */}
+//           {multiSheetData.length > 0 && (
+//             <button 
+//               onClick={handleSubmitCertificate} 
+//               disabled={submitLoading}
+//               style={{
+//                 ...styles.submitBtn, 
+//                 opacity: submitLoading ? 0.6 : 1, 
+//                 cursor: submitLoading ? 'not-allowed' : 'pointer'
+//               }}
+//             >
+//               <Save size={16} style={{ marginRight: '8px' }} />
+//               {submitLoading ? 'Saving...' : 'Submit'}
+//             </button>
+//           )}
+
+//           {/* {multiSheetData.length > 0 && (
+//             <button onClick={downloadAsPDF} style={{ padding: '10px 20px', cursor: 'pointer', background: '#000', color: '#fff', marginLeft: '10px', borderRadius: '4px', border: 'none' }}>
+//               {loading ? 'Processing...' : <><Download size={14} style={{ marginRight: '5px', verticalAlign: 'middle' }} /> Download PDF</>}
+//             </button>
+//           )} */}
+//         </div>
+
+//         <div>
+//           <span style={{ fontWeight: 'bold' }}>Select Signature:</span>
+//           <label style={styles.radioLabel}>
+//             <input type="radio" name="sig" value="none" checked={selectedSign === 'none'} onChange={(e) => setSelectedSign(e.target.value)} /> None
+//           </label>
+//           <label style={styles.radioLabel}>
+//             <input type="radio" name="sig" value="sign1" checked={selectedSign === 'sign1'} onChange={(e) => setSelectedSign(e.target.value)} /> Sign 1
+//           </label>
+//           <label style={styles.radioLabel}>
+//             <input type="radio" name="sig" value="sign2" checked={selectedSign === 'sign2'} onChange={(e) => setSelectedSign(e.target.value)} /> Sign 2
+//           </label>
+//         </div>
+//       </div>
+
+//       <div className="report-container" style={styles.reportContainer} ref={certificateRef}>
+//         <table style={styles.table}>
+//           <tbody>
+//             <tr>
+//               <td colSpan="9" style={{ ...styles.cell, ...styles.textLeft, borderBottom: 'none', borderRight: 'none', fontSize: '10px' }}>
+//                 {hData ? hData.formatNo : 'Format No. : ICCL/QC/R/14, Rev 01, Date: 01/04/2024'}
+//               </td>
+//               <td colSpan="5" style={{ ...styles.cell, ...styles.textRight, borderBottom: 'none', borderLeft: 'none', fontSize: '10px' }}>
+//                 {hData ? hData.crNo : 'C.R. 2055012479'}
+//               </td>
+//               <td rowSpan="2" style={{ ...styles.cell, width: '110px' }}>
+//                 <img src={logo} alt="ICCL" style={{ width: '90px', display: 'block', margin: '0 auto' }} />
+//               </td>
+//             </tr>
+//             <tr>
+//               <td colSpan="14" style={{ ...styles.cell, padding: '5px 15px' }}>
+//                 <div style={{ textAlign: 'center' }}>
+//                   <span style={styles.companyTitle}>
+//                     {hData ? hData.companyTitleEn : 'Instrumentation & Controls Co. Ltd. (ICCL).'}
+//                   </span>
+//                   <span style={styles.arabic}>
+//                     {hData ? hData.companyTitleAr : 'شركة الآلات الدقيقة والتحكم المحدودة'}
+//                   </span>
+//                   <div style={styles.address}>
+//                     {hData ? hData.address : 'Lot #56, Block #02, Section G, Support Industries, Jubail 2, P.O. Box No. 11300, Jubail – 31961 KSA'}
+//                   </div>
+//                 </div>
+//               </td>
+//             </tr>
+//             <tr>
+//               <td colSpan="11" style={{ ...styles.cell, ...styles.bold, fontSize: '14px', height: '50px' }}>MATERIAL TESTING REPORT AND GUARANTEE CERTIFICATE</td>
+//               <td colSpan="4" style={{ padding: 0, border: '1px solid #000' }}>
+//                 <table style={styles.nestedTable}>
+//                   <tbody>
+//                     <tr>
+//                       <td style={{ ...styles.nestedCell, borderBottom: '1px solid #000', fontWeight: 'bold' }}>CERT.NO.:</td>
+//                       <td style={{ ...styles.nestedCell, borderBottom: '1px solid #000', fontWeight: 'bold' }}>{hData ? hData.certNo : '505TC/02/2026'}</td>
+//                     </tr>
+//                     <tr>
+//                       <td style={{ ...styles.nestedCell, fontWeight: 'bold' }}>DATE:</td>
+//                       <td style={{ ...styles.nestedCell, fontWeight: 'bold' }}>{todayDate}</td>
+//                     </tr>
+//                   </tbody>
+//                 </table>
+//               </td>
+//             </tr>
+//             <tr>
+//               <td colSpan="2" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>CUSTOMER NAME</td>
+//               <td colSpan="9" style={{ ...styles.cell, ...styles.textLeft }}>{hData?.customerName}</td>
+//               <td colSpan="2" style={{ ...styles.cell, ...styles.bold, textAlign: 'left' }}>Delivery Note No.:</td>
+//               <td colSpan="2" style={{ ...styles.cell, ...styles.bold, textAlign: 'left', fontSize: '13px' }}>{hData?.deliveryNoteNo}</td>
+//             </tr>
+//             <tr>
+//               <td colSpan="2" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>P.O.NO.</td>
+//               <td colSpan="4" style={{ ...styles.cell, ...styles.textLeft }}>{hData?.poNo}</td>
+//               <td colSpan="2" style={{ ...styles.cell, ...styles.bold }}>P.O.Date:</td>
+//               <td colSpan="3" style={styles.cell}>{hData?.poDate}</td>
+//               <td colSpan="2" style={{ ...styles.cell, ...styles.bold, textAlign: 'left' }}>Date:</td>
+//               <td colSpan="2" style={{ ...styles.cell, ...styles.textLeft }}>{hData?.deliveryDate}</td>
+//             </tr>
+//             <tr style={styles.bold}>
+//               <td style={{ ...styles.cell, width: '35px' }}>PO<br />L/1</td>
+//               <td style={{ ...styles.cell, width: '230px' }}>ITEM & SIZE</td>
+//               <td style={{ ...styles.cell, width: '80px' }}>RAW<br />MTL. SIZE</td>
+//               <td style={{ ...styles.cell, width: '90px' }}>T.C.NO.</td>
+//               <td style={{ ...styles.cell, width: '85px' }}>Traceability<br />no-</td>
+//               <td colSpan="8" style={styles.cell}>CHEMICAL COMPOSITION %</td>
+//               <td style={{ ...styles.cell, width: '45px' }}>QTY<br />PCS</td>
+//               <td style={{ ...styles.cell, width: '140px' }}>MATL.<br />Conf.To</td>
+//             </tr>
+//             <tr style={{ ...styles.bold, fontSize: '10px' }}>
+//               <td colSpan="5" style={styles.cell}></td>
+//               {['C', 'Cr', 'Ni', 'Mo', 'Mn', 'Si', 'S', 'P'].map(c => <td key={c} style={{ ...styles.cell, width: '50px' }}>{c}</td>)}
+//               <td colSpan="2" style={styles.cell}></td>
+//             </tr>
+//             {multiSheetData[0]?.items?.map((item, idx) => (
+//               <tr key={idx}>
+//                 <td style={styles.cell}>{item.poLi}</td>
+//                 <td style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>{item.itemSize}</td>
+//                 <td style={styles.cell}>{item.rawMtlSize}</td>
+//                 <td style={styles.cell}>
+//                   <input
+//                     style={styles.input}
+//                     placeholder=""
+//                     value={item.tcNo}
+//                     onChange={(e) => handleTcNoChange(0, idx, e.target.value)}
+//                   />
+//                 </td>
+//                 <td style={styles.cell}>{item.traceability}</td>
+//                 <td style={styles.cell}>{item.C}</td>
+//                 <td style={styles.cell}>{item.Cr}</td>
+//                 <td style={styles.cell}>{item.Ni}</td>
+//                 <td style={styles.cell}>{item.Mo}</td>
+//                 <td style={styles.cell}>{item.Mn}</td>
+//                 <td style={styles.cell}>{item.Si}</td>
+//                 <td style={styles.cell}>{item.S}</td>
+//                 <td style={styles.cell}>{item.P}</td>
+//                 <td style={styles.cell}>{item.qty}</td>
+//                 <td style={{ ...styles.cell, ...styles.textLeft }}>{item.matlConfTo}</td>
+//               </tr>
+//             ))}
+//             <tr>
+//               <td colSpan="15" style={{ ...styles.cell, textAlign: 'left', padding: '10px' }}>
+//                 TEST: ABOVE FITTINGS ARE HYDRO TESTED MAKING A SAMPLE LOOP AT REQUIRED PRESSURE WITHOUT ANY LEAKAGE.
+//               </td>
+//             </tr>
+//             <tr>
+//               <td colSpan="9" style={{ ...styles.cell, textAlign: 'left', padding: '10px' }}>
+//                 <span style={styles.bold}>WE GUARANTEE ABOVE MATERIAL AGAINST ANY MANUFACTURING DEFECT FOR 12 MONTHS</span>
+//               </td>
+//               <td colSpan="6" style={{ ...styles.cell, height: '140px', verticalAlign: 'top', padding: '10px', textAlign: 'center' }}>
+//                 <div style={styles.bold}>FOR Instrumentation & Controls Co. Ltd</div>
+//                 {selectedSign === 'sign1' && (
+//                   <img src={sign1} alt="Signature 1" style={styles.signatureImg} />
+//                 )}
+//                 {selectedSign === 'sign2' && (
+//                   <img src={sign2} alt="Signature 2" style={styles.signatureImg} />
+//                 )}
+//               </td>
+//             </tr>
+//           </tbody>
+//         </table>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default CreateNewSheet;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { CheckCircle, Loader2, Download } from 'lucide-react';
+import { Download, Save } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import logo from './Assets/logo.png'; // Your real logo
+import logo from './Assets/logo.png';
+
+// Import Signatures
+import sign1 from './Assets/Signatures/sign1.png';
+import sign2 from './Assets/Signatures/sign2.png';
 
 const CreateNewSheet = () => {
   const [multiSheetData, setMultiSheetData] = useState([]);
   const [fileName, setFileName] = useState('');
-  const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ text: '', type: '' });
-
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [selectedSign, setSelectedSign] = useState('none'); // 'none', 'sign1', 'sign2'
   const certificateRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -25,614 +484,417 @@ const CreateNewSheet = () => {
 
   const todayDate = getTodayDate();
 
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(e.type === 'dragenter' || e.type === 'dragover');
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0]);
-  };
-
-  const handleChange = (e) => {
-    e.preventDefault();
-    if (e.target.files?.[0]) processFile(e.target.files[0]);
-  };
-
   const formatExcelDate = (val) => {
     if (typeof val !== 'number' || val < 30000 || val > 60000) return val;
     const days = Math.floor(val - 25569);
     const date = new Date(days * 86400 * 1000);
     const dd = date.getUTCDate().toString().padStart(2, '0');
-    const mm = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-    const yyyy = date.getUTCFullYear();
-    return `${dd}-${mm}-${yyyy}`;
+    const month = date.toLocaleString('default', { month: 'short' });
+    const yy = date.getUTCFullYear().toString().slice(-2);
+    return `${dd}-${month}-${yy}`;
   };
 
   const extractFromFirstSheet = (wb) => {
     const sheetName = wb.SheetNames[0];
     const ws = wb.Sheets[sheetName];
-
     const get = (ref) => {
       const cell = ws[ref];
       if (!cell) return null;
-      if (cell.t === 'n' && cell.v > 30000 && cell.v < 60000) {
-        return formatExcelDate(cell.v);
-      }
+      if (cell.t === 'n' && cell.v > 30000 && cell.v < 60000) return formatExcelDate(cell.v);
       return cell.v ?? null;
     };
 
     const headers = {
-      formatNo: get('A1') || 'Format No.: ICCL/QC/R/14, Rev 01, Date: 01/04/2024',
-      crNo: get('I1') || 'C.R. 2055012479',
-      customerName: get('B4') || get('C4') || get('B3') || get('A3') || '',
-      deliveryNoteNo: get('A9') || get('B8') || '',
-      deliveryDate: get('B9') || get('C9') || '',
-      poNo: get('D9') || get('E8') || '',
-      poDate: get('E9') || get('F9') || '',
-      certNo: '505TC/02/2026',
-      certDate: todayDate,
+      formatNo: 'Format No. : ICCL/QC/R/14, Rev 01, Date: 01/04/2024',
+      crNo: 'C.R. 2055012479',
+      companyTitleEn: 'Instrumentation & Controls Co. Ltd. (ICCL).',
+      companyTitleAr: 'شركة الآلات الدقيقة والتحكم المحدودة',
+      address: 'Lot #56, Block #02, Section G, Support Industries, Jubail 2, P.O. Box No. 11300, Jubail – 31961 KSA',
+      customerName: get('B4') || get('C4') || get('B3') || 'Flowserve Abahsain Flow Control Co Ltd',
+      deliveryNoteNo: get('A9') || '-',
+      deliveryDate: get('C9') || '-',
+      poNo: get('D9') || '-',
+      poDate: get('F9') || '-',
+      certNo: '505TC/02/2026' // Default or based on logic
     };
 
     let headerRow = -1;
+    let descColIndex = -1;
+    let jobColIndex = -1;
     let qtyColIndex = -1;
 
     const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:ZZ200');
 
     for (let r = range.s.r; r <= range.e.r && r < 60; r++) {
-      let rowText = '';
+      let foundHeader = false;
       for (let c = 0; c < 20; c++) {
-        const val = get(XLSX.utils.encode_cell({ r, c }));
-        if (val) rowText += ' ' + String(val).toUpperCase().replace(/\s+/g, ' ').trim();
+        const val = String(get(XLSX.utils.encode_cell({ r, c })) || '').toUpperCase();
+        if (val.includes('DESCRIPTION')) { descColIndex = c; foundHeader = true; }
+        if (val.includes('JOB NO')) { jobColIndex = c; }
+        if (val.includes('QTY')) { qtyColIndex = c; }
       }
-
-      if (
-        (rowText.includes('SR NO') || rowText.includes('SR.NO') || rowText.includes('SR.NO.')) &&
-        rowText.includes('DESCRIPTION') &&
-        rowText.includes('QTY PCS')
-      ) {
-        headerRow = r;
-        for (let c = 0; c < 20; c++) {
-          const val = get(XLSX.utils.encode_cell({ r, c }));
-          if (val && String(val).toUpperCase().includes('QTY PCS')) {
-            qtyColIndex = c;
-            break;
-          }
-        }
-        break;
-      }
+      if (foundHeader) { headerRow = r; break; }
     }
 
     let items = [];
     if (headerRow !== -1) {
       for (let r = headerRow + 1; r <= range.e.r; r++) {
-        const row = [];
-        for (let c = 0; c < 18; c++) {
-          row.push(get(XLSX.utils.encode_cell({ r, c })) ?? '');
-        }
+        const poLiValue = get(XLSX.utils.encode_cell({ r, c: 0 }));
+        const isNumeric = poLiValue !== null && !isNaN(parseFloat(poLiValue)) && isFinite(poLiValue);
+        if (!isNumeric) continue;
 
-        const firstContent = row.slice(0, 6).join('').trim();
-        if (!firstContent) continue;
-
-        if (
-          String(row[0] || '').toUpperCase().includes('TOTAL') ||
-          String(row[0] || '').includes('RECEIVED BY') ||
-          String(row[0] || '').includes('NET WEIGHT') ||
-          String(row[0] || '').includes('GROSS WEIGHT') ||
-          String(row[0] || '').includes('NO OF') ||
-          String(row[0] || '').includes('CARTON') ||
-          String(row[0] || '').includes('PALLET')
-        ) continue;
-
-        const poLiValue = String(row[0] || '').trim();
-
-        if (poLiValue && poLiValue !== '-' && !poLiValue.toUpperCase().includes('TOTAL')) {
-          const qtyValue = qtyColIndex >= 0 ? String(row[qtyColIndex] || '').trim() : '';
-
-          items.push({
-            poLi:         poLiValue,
-            itemSize:     String(row[1] || '').trim(),
-            rawMtlSize:   '',
-            tcNo:         '',
-            traceability: String(row[2] || '').trim() || '',
-            C:            '',
-            Cr:           '',
-            Ni:           '',
-            Mo:           '',
-            Mn:           '',
-            Si:           '',
-            S:            '',
-            P:            '',
-            qty:          qtyValue,
-            matlConfTo:   '',
-          });
-        }
+        items.push({
+          poLi: String(poLiValue).trim(),
+          itemSize: descColIndex >= 0 ? String(get(XLSX.utils.encode_cell({ r, c: descColIndex })) || '').trim() : '',
+          traceability: jobColIndex >= 0 ? String(get(XLSX.utils.encode_cell({ r, c: jobColIndex })) || '').trim() : '',
+          rawMtlSize: '',
+          tcNo: '',
+          C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '',
+          qty: qtyColIndex >= 0 ? String(get(XLSX.utils.encode_cell({ r, c: qtyColIndex })) || '').trim() : '',
+          matlConfTo: '',
+        });
       }
     }
-
-    return { sheetName, headers, items };
+    return { headers, items };
   };
 
   const processFile = (file) => {
-    if (!/\.xlsx?$/.test(file.name)) {
-      setMessage({ text: 'Only .xlsx / .xls allowed', type: 'error' });
-      return;
-    }
-
+    if (!file) return;
     setFileName(file.name);
-    setMultiSheetData([]);
-    setMessage({ text: 'Reading...', type: 'info' });
-
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
+        const wb = XLSX.read(e.target.result, { type: 'array' });
         const data = extractFromFirstSheet(wb);
         setMultiSheetData([data]);
-
-        const count = data.items.length;
-        setMessage({ text: `Loaded ${count} row${count !== 1 ? 's' : ''}`, type: count > 0 ? 'success' : 'warning' });
-      } catch (err) {
-        console.error(err);
-        setMessage({ text: 'Failed to read file', type: 'error' });
-      }
+      } catch (err) { console.error('Error reading Excel', err); }
     };
-
     reader.readAsArrayBuffer(file);
   };
 
-  const updateItemField = (sheetIndex, itemIndex, field, value) => {
-    const newData = [...multiSheetData];
-    newData[sheetIndex].items[itemIndex][field] = value;
-    setMultiSheetData(newData);
-  };
+  const handleTcNoChange = async (sheetIndex, itemIndex, tcNoValue) => {
+    const updatedData = [...multiSheetData];
+    updatedData[sheetIndex].items[itemIndex].tcNo = tcNoValue;
 
-  const fetchAndFillRow = async (sheetIndex, itemIndex, tcNoValue) => {
-    const currentPoLi = multiSheetData[sheetIndex]?.items[itemIndex]?.poLi?.trim();
-
-    if (!currentPoLi || currentPoLi === '-' || currentPoLi === '') {
-      setMessage({ text: 'No PO L/I', type: 'warning' });
+    if (!tcNoValue.trim()) {
+      updatedData[sheetIndex].items[itemIndex] = {
+        ...updatedData[sheetIndex].items[itemIndex],
+        rawMtlSize: '', C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', matlConfTo: ''
+      };
+      setMultiSheetData(updatedData);
       return;
     }
 
-    if (!tcNoValue?.trim()) {
-      setMessage({ text: 'Enter TC No', type: 'error' });
-      return;
-    }
-
-    setLoading(true);
-    setMessage({ text: `Fetching ${tcNoValue}...`, type: 'info' });
+    setMultiSheetData(updatedData);
 
     try {
       const res = await fetch(`http://localhost:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
       const data = await res.json();
 
       if (data.success && data.record) {
+        const finalData = [...multiSheetData];
         const record = data.record;
-        const updatedData = [...multiSheetData];
-        const sheetItems = [...updatedData[sheetIndex].items];
-        const currentItem = { ...sheetItems[itemIndex] };
-
-        currentItem.tcNo = record.tc_no || tcNoValue;
-        currentItem.rawMtlSize = record.size || '';
-        currentItem.C = record.c || '';
-        currentItem.Cr = record.cr || '';
-        currentItem.Ni = record.ni || '';
-        currentItem.Mo = record.mo || '';
-        currentItem.Mn = record.mn || '';
-        currentItem.Si = record.si || '';
-        currentItem.S = record.s || '';
-        currentItem.P = record.p || '';
-        currentItem.matlConfTo = record.material_grade || '';
-
-        sheetItems[itemIndex] = currentItem;
-        updatedData[sheetIndex] = { ...updatedData[sheetIndex], items: sheetItems };
-
-        setMultiSheetData(updatedData);
-        setMessage({ text: `Row ${itemIndex + 1} filled`, type: 'success' });
+        finalData[sheetIndex].items[itemIndex] = {
+          ...finalData[sheetIndex].items[itemIndex],
+          rawMtlSize: record.size || '',
+          C: record.c || '', Cr: record.cr || '', Ni: record.ni || '', Mo: record.mo || '',
+          Mn: record.mn || '', Si: record.si || '', S: record.s || '', P: record.p || '',
+          matlConfTo: record.material_grade || '',
+        };
+        setMultiSheetData(finalData);
       } else {
-        setMessage({ text: `No record found`, type: 'error' });
+        const finalData = [...multiSheetData];
+        finalData[sheetIndex].items[itemIndex] = {
+          ...finalData[sheetIndex].items[itemIndex],
+          rawMtlSize: '', C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', matlConfTo: ''
+        };
+        setMultiSheetData(finalData);
       }
     } catch (err) {
-      setMessage({ text: 'Fetch failed', type: 'error' });
       console.error(err);
+    }
+  };
+
+  // --- UPDATED SUBMIT FUNCTION ---
+  const handleSubmitCertificate = async () => {
+    if (multiSheetData.length === 0) return;
+
+    setSubmitLoading(true);
+    const data = multiSheetData[0];
+
+    // Map selectedSign to number
+    let signatureValue = 0;
+    if (selectedSign === 'sign1') signatureValue = 1;
+    if (selectedSign === 'sign2') signatureValue = 2;   // ← change to 3 if you want
+
+    const payload = {
+      cert_no: data.headers.certNo,
+      cert_date: todayDate,
+      delivery_note_no: data.headers.deliveryNoteNo,
+      delivery_date: data.headers.deliveryDate,
+      customer_name: data.headers.customerName,
+      po_no: data.headers.poNo,
+      po_date: data.headers.poDate,
+      signature: signatureValue,                    // ← NEW FIELD
+      items: data.items.map(item => ({
+        po_lineitem_no: item.poLi,
+        item_size: item.itemSize,
+        raw_material_size: item.rawMtlSize,
+        tc_no: item.tcNo,
+        traceability_no: item.traceability,
+        qty_pcs: item.qty,
+        material_grade: item.matlConfTo,
+        c: item.C,
+        cr: item.Cr,
+        ni: item.Ni,
+        mo: item.Mo,
+        mn: item.Mn,
+        si: item.Si,
+        s: item.S,
+        p: item.P
+      }))
+    };
+
+    try {
+      const response = await fetch('http://localhost:5000/api/sheet/create-certificate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert('Certificate stored in database successfully!');
+      } else {
+        alert('Failed to store: ' + (result.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      alert('Network error while saving certificate');
     } finally {
-      setLoading(false);
+      setSubmitLoading(false);
     }
   };
 
   const downloadAsPDF = async () => {
     if (!certificateRef.current) return;
-
     setLoading(true);
-    setMessage({ text: 'Generating PDF...', type: 'info' });
-
     try {
-      const canvas = await html2canvas(certificateRef.current, {
-        scale: 2.8,
-        useCORS: true,
-        logging: false,
-      });
-
+      const canvas = await html2canvas(certificateRef.current, { scale: 2.5, useCORS: true });
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-      const imgX = (pdfWidth - imgWidth * ratio) / 2;
-      const imgY = 5;
-
-      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
-      pdf.save(`Certificate_${todayDate}.pdf`);
-
-      setMessage({ text: 'PDF downloaded', type: 'success' });
-    } catch (err) {
-      console.error(err);
-      setMessage({ text: 'PDF failed', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const width = pdf.internal.pageSize.getWidth();
+      const height = (canvas.height * width) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, width, height);
+      pdf.save(`MTR_${fileName || 'Report'}.pdf`);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   };
 
+  const styles = {
+    body: { fontFamily: 'Arial, sans-serif', fontSize: '11px', color: '#000' },
+    topNav: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 40px', background: '#f8f9fa', borderBottom: '1px solid #ddd' },
+    reportContainer: { width: '1100px', margin: '20px auto', border: '2px solid #000', backgroundColor: 'white' },
+    table: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
+    cell: { border: '1px solid #000', padding: '4px 2px', textAlign: 'center', verticalAlign: 'middle', wordWrap: 'break-word' },
+    bold: { fontWeight: 'bold' },
+    textLeft: { textAlign: 'left', paddingLeft: '10px' },
+    textRight: { textAlign: 'right', paddingRight: '8px' },
+    arabic: { fontSize: '18px', fontWeight: 'bold', direction: 'rtl', margin: '0 5px' },
+    companyTitle: { fontSize: '18px', fontWeight: 'bold' },
+    address: { fontWeight: 'normal', fontSize: '9px', marginTop: '2px', display: 'block' },
+    nestedTable: { border: 'none', width: '100%', height: '100%', borderCollapse: 'collapse' },
+    nestedCell: { border: 'none', padding: '10px 5px', borderLeft: '1px solid #000', textAlign: 'left' },
+    input: { width: '100%', fontSize: '12px', border: 'none', textAlign: 'center', fontWeight: 'bold', outline: 'none', background: 'transparent' },
+    radioLabel: { marginLeft: '15px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' },
+    signatureImg: { width: '120px', display: 'block', margin: '10px auto 0 auto' },
+    submitBtn: { padding: '10px 25px', cursor: 'pointer', background: '#28a745', color: '#fff', marginLeft: '10px', borderRadius: '4px', border: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center' }
+  };
+
+  const hData = multiSheetData[0]?.headers;
+
   return (
-    <>
-      <style jsx>{`
-        body { margin: 0; background: #ffffff; font-family: Arial, sans-serif; }
-        .upload-fixed {
-          position: sticky;
-          top: 0;
-          z-index: 100;
-          background: white;
-          border-bottom: 1px solid #000;
-          padding: 15px 20px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          text-align: center;
-        }
-        .upload-area {
-          border: 2px dashed #000;
-          border-radius: 8px;
-          padding: 18px 40px;
-          display: inline-block;
-          background: #ffffff;
-          transition: all 0.25s;
-          cursor: pointer;
-        }
-        .upload-area:hover, .upload-area.drag-active {
-          border-color: #000;
-          background: #f5f5f5;
-        }
-        .certificate-container {
-          width: 98%;
-          max-width: 1450px;
-          margin: 20px auto 40px;
-          font-size: 13px;
-          border: 2px solid #000;
-          padding: 25px;
-          background: white;
-        }
-        .header-white {
-          border-bottom: 1px solid #000;
-          padding: 8px 12px;
-          font-size: 13px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        .logo { width: 100px; height: auto; }
-        .company-title {
-          text-align: center;
-          font-size: 22px;
-          font-weight: bold;
-          margin: 10px 0 4px;
-          color: #000;
-        }
-        .arabic-title { font-size: 18px; display: block; margin-bottom: 4px; }
-        .address-line { text-align: center; font-size: 11.5px; margin-bottom: 15px; line-height: 1.4; color: #000; }
-        .main-title {
-          text-align: center;
-          font-size: 19px;
-          font-weight: bold;
-          margin: 15px 0;
-          padding: 6px 0;
-          border-top: 1px solid #000;
-          border-bottom: 1px solid #000;
-          color: #000;
-        }
-        .cert-row {
-          display: flex;
-          justify-content: flex-end;
-          gap: 80px;
-          font-weight: bold;
-          margin: 10px 0 15px;
-          font-size: 14px;
-          color: #000;
-        }
-        .info-box {
-          background: #ffffff;
-          padding: 10px 15px;
-          margin-bottom: 10px;
-          font-size: 13px;
-          border: 1px solid #000;
-          border-radius: 4px;
-          color: #000;
-        }
-        .customer-info, .po-info {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 20px;
-        }
-        .data-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 12px;
-          margin: 15px 0;
-          table-layout: auto;
-        }
-        .data-table th, .data-table td {
-          border: 1px solid #000;
-          padding: 7px 6px;
-          text-align: center;
-          vertical-align: middle;
-          color: #000;
-        }
-        .data-table th {
-          background: #f0f0f0;
-          font-weight: bold;
-          white-space: nowrap;
-          font-size: 12.5px;
-        }
-        .data-table td {
-          white-space: normal;
-          word-break: break-word;
-        }
-        .tc-input-container {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          justify-content: center;
-        }
-        .tc-input {
-          width: 85px;           /* fits 8 digits exactly */
-          padding: 5px 6px;
-          font-size: 12px;
-          border: 1px solid #000;
-          border-radius: 4px;
-          box-sizing: border-box;
-          text-align: center;
-          background: white;
-          color: #000;
-        }
-        .fetch-btn {
-          background: none;
-          border: none;
-          padding: 4px;
-          cursor: pointer;
-          line-height: 1;
-        }
-        .shaded { background: #f8f8f8 !important; }
-        .material-grade { background: #ffffff !important; text-align: left !important; padding-left: 10px !important; }
-        .test-notes, .guarantee-section {
-          margin: 20px 0;
-          padding: 12px;
-          border: 1px solid #000;
-          background: #ffffff;
-          color: #000;
-        }
-        .guarantee-section { display: flex; justify-content: space-between; align-items: flex-end; }
-        .status-message {
-          padding: 12px;
-          border: 1px solid #000;
-          border-radius: 6px;
-          margin: 15px auto;
-          text-align: center;
-          font-weight: bold;
-          max-width: 1450px;
-          background: #ffffff;
-          color: #000;
-        }
-        .success { border-color: #000; }
-        .error { border-color: #000; }
-        .info { border-color: #000; }
+    <div style={styles.body}>
+      <div style={styles.topNav}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <input type="file" ref={fileInputRef} onChange={(e) => processFile(e.target.files[0])} style={{ display: 'none' }} />
+          <button onClick={() => fileInputRef.current.click()} style={{ padding: '10px 20px', cursor: 'pointer', borderRadius: '4px', border: '1px solid #ccc' }}>
+            {fileName ? fileName : "Upload Excel"}
+          </button>
 
-        @media print {
-          .upload-fixed, .status-message { display: none !important; }
-          .tc-input-container { display: none !important; }
-        }
-      `}</style>
-
-      {/* Fixed upload area */}
-      <div className="upload-fixed">
-        <div
-          className={`upload-area ${dragActive ? 'drag-active' : ''}`}
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={handleChange}
-            style={{ display: 'none' }}
-            id="excel-upload"
-          />
-          <label htmlFor="excel-upload">
-            Upload Excel File (First sheet only)
-          </label>
-          {fileName && (
-            <p style={{ marginTop: '8px', color: '#000', fontSize: '14px' }}>
-              Loaded: {fileName}
-            </p>
+          {/* SUBMIT BUTTON */}
+          {multiSheetData.length > 0 && (
+            <button 
+              onClick={handleSubmitCertificate} 
+              disabled={submitLoading}
+              style={{
+                ...styles.submitBtn, 
+                opacity: submitLoading ? 0.6 : 1, 
+                cursor: submitLoading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <Save size={16} style={{ marginRight: '8px' }} />
+              {submitLoading ? 'Saving...' : 'Submit'}
+            </button>
           )}
         </div>
 
-        {multiSheetData.length > 0 && (
-          <button
-            onClick={downloadAsPDF}
-            disabled={loading}
-            style={{
-              marginTop: '12px',
-              padding: '8px 18px',
-              fontSize: '14px',
-              background: '#000',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-            }}
-          >
-            <Download size={16} style={{ display: 'inline', marginRight: '6px' }} />
-            Download PDF
-          </button>
-        )}
+        <div>
+          <span style={{ fontWeight: 'bold' }}>Select Signature:</span>
+          <label style={styles.radioLabel}>
+            <input 
+              type="radio" 
+              name="sig" 
+              value="none" 
+              checked={selectedSign === 'none'} 
+              onChange={(e) => setSelectedSign(e.target.value)} 
+            /> none
+          </label>
+          <label style={styles.radioLabel}>
+            <input 
+              type="radio" 
+              name="sig" 
+              value="sign1" 
+              checked={selectedSign === 'sign1'} 
+              onChange={(e) => setSelectedSign(e.target.value)} 
+            /> JUNAID KHAN
+          </label>
+          <label style={styles.radioLabel}>
+            <input 
+              type="radio" 
+              name="sig" 
+              value="sign2" 
+              checked={selectedSign === 'sign2'} 
+              onChange={(e) => setSelectedSign(e.target.value)} 
+            /> SAIKIRAN
+          </label>
+        </div>
       </div>
 
-      {message.text && (
-        <div className={`status-message ${message.type}`}>
-          {message.text}
-        </div>
-      )}
-
-      <div className="certificate-container" ref={certificateRef}>
-        <div className="header-white">
-          <div>
-            {multiSheetData[0]?.headers?.formatNo || 'Format No.: ICCL/QC/R/14, Rev 01, Date: 01/04/2024'}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            {multiSheetData[0]?.headers?.crNo || 'C.R. 2055012479'}
-            <img src={logo} alt="ICCL Logo" className="logo" />
-          </div>
-        </div>
-
-        <div className="company-title">
-          <span className="arabic-title">شركة الآلات الدقيقة والتحكم المحدودة</span>
-          Instrumentation & Controls Co. Ltd. (ICCL).
-        </div>
-
-        <div className="address-line">
-          Lot #56, Block #02, Section G, Support Industries, Jubail 2, P.O. Box No. 11300, Jubail – 31961 KSA<br />
-          Email: info@icclksa.com Web: www.icclksa.com
-        </div>
-
-        <div className="main-title">MATERIAL TESTING REPORT AND GUARANTEE CERTIFICATE</div>
-
-        <div className="cert-row">
-          <div>CERT.NO. 505TC/02/2026</div>
-          <div>DATE: {todayDate}</div>
-        </div>
-
-        <div className="info-box customer-info">
-          <div><strong>CUSTOMER NAME</strong> {multiSheetData[0]?.headers?.customerName || '-'}</div>
-        </div>
-
-        <div className="info-box po-info">
-          <div>
-            <strong>Delivery Note No.:</strong> {multiSheetData[0]?.headers?.deliveryNoteNo || '-'}
-            <strong style={{ marginLeft: '30px' }}>Date:</strong> {multiSheetData[0]?.headers?.deliveryDate || '-'}
-          </div>
-          <div>
-            <strong>P.O.NO.</strong> {multiSheetData[0]?.headers?.poNo || '-'}
-            <strong style={{ marginLeft: '30px' }}>P.O.Date:</strong> {multiSheetData[0]?.headers?.poDate || '-'}
-          </div>
-        </div>
-
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>PO L/I</th>
-              <th>Item & Size</th>
-              <th>Raw Size</th>
-              <th>T.C.No</th>
-              <th>Traceability</th>
-              <th>C</th>
-              <th>Cr</th>
-              <th>Ni</th>
-              <th>Mo</th>
-              <th>Mn</th>
-              <th>Si</th>
-              <th>S</th>
-              <th>P</th>
-              <th>Qty</th>
-              <th>Material Conf. To</th>
-            </tr>
-          </thead>
+      <div className="report-container" style={styles.reportContainer} ref={certificateRef}>
+        <table style={styles.table}>
           <tbody>
+            <tr>
+              <td colSpan="9" style={{ ...styles.cell, ...styles.textLeft, borderBottom: 'none', borderRight: 'none', fontSize: '10px' }}>
+                {hData ? hData.formatNo : 'Format No. : ICCL/QC/R/14, Rev 01, Date: 01/04/2024'}
+              </td>
+              <td colSpan="5" style={{ ...styles.cell, ...styles.textRight, borderBottom: 'none', borderLeft: 'none', fontSize: '10px' }}>
+                {hData ? hData.crNo : 'C.R. 2055012479'}
+              </td>
+              <td rowSpan="2" style={{ ...styles.cell, width: '110px' }}>
+                <img src={logo} alt="ICCL" style={{ width: '90px', display: 'block', margin: '0 auto' }} />
+              </td>
+            </tr>
+            <tr>
+              <td colSpan="14" style={{ ...styles.cell, padding: '5px 15px' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <span style={styles.companyTitle}>
+                    {hData ? hData.companyTitleEn : 'Instrumentation & Controls Co. Ltd. (ICCL).'}
+                  </span>
+                  <span style={styles.arabic}>
+                    {hData ? hData.companyTitleAr : 'شركة الآلات الدقيقة والتحكم المحدودة'}
+                  </span>
+                  <div style={styles.address}>
+                    {hData ? hData.address : 'Lot #56, Block #02, Section G, Support Industries, Jubail 2, P.O. Box No. 11300, Jubail – 31961 KSA'}
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td colSpan="11" style={{ ...styles.cell, ...styles.bold, fontSize: '14px', height: '50px' }}>MATERIAL TESTING REPORT AND GUARANTEE CERTIFICATE</td>
+              <td colSpan="4" style={{ padding: 0, border: '1px solid #000' }}>
+                <table style={styles.nestedTable}>
+                  <tbody>
+                    <tr>
+                      <td style={{ ...styles.nestedCell, borderBottom: '1px solid #000', fontWeight: 'bold' }}>CERT.NO.:</td>
+                      <td style={{ ...styles.nestedCell, borderBottom: '1px solid #000', fontWeight: 'bold' }}>{hData ? hData.certNo : '505TC/02/2026'}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ ...styles.nestedCell, fontWeight: 'bold' }}>DATE:</td>
+                      <td style={{ ...styles.nestedCell, fontWeight: 'bold' }}>{todayDate}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td colSpan="2" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>CUSTOMER NAME</td>
+              <td colSpan="9" style={{ ...styles.cell, ...styles.textLeft }}>{hData?.customerName}</td>
+              <td colSpan="2" style={{ ...styles.cell, ...styles.bold, textAlign: 'left' }}>Delivery Note No.:</td>
+              <td colSpan="2" style={{ ...styles.cell, ...styles.bold, textAlign: 'left', fontSize: '13px' }}>{hData?.deliveryNoteNo}</td>
+            </tr>
+            <tr>
+              <td colSpan="2" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>P.O.NO.</td>
+              <td colSpan="4" style={{ ...styles.cell, ...styles.textLeft }}>{hData?.poNo}</td>
+              <td colSpan="2" style={{ ...styles.cell, ...styles.bold }}>P.O.Date:</td>
+              <td colSpan="3" style={styles.cell}>{hData?.poDate}</td>
+              <td colSpan="2" style={{ ...styles.cell, ...styles.bold, textAlign: 'left' }}>Date:</td>
+              <td colSpan="2" style={{ ...styles.cell, ...styles.textLeft }}>{hData?.deliveryDate}</td>
+            </tr>
+            <tr style={styles.bold}>
+              <td style={{ ...styles.cell, width: '35px' }}>PO<br />L/1</td>
+              <td style={{ ...styles.cell, width: '230px' }}>ITEM & SIZE</td>
+              <td style={{ ...styles.cell, width: '80px' }}>RAW<br />MTL. SIZE</td>
+              <td style={{ ...styles.cell, width: '90px' }}>T.C.NO.</td>
+              <td style={{ ...styles.cell, width: '85px' }}>Traceability<br />no-</td>
+              <td colSpan="8" style={styles.cell}>CHEMICAL COMPOSITION %</td>
+              <td style={{ ...styles.cell, width: '45px' }}>QTY<br />PCS</td>
+              <td style={{ ...styles.cell, width: '140px' }}>MATL.<br />Conf.To</td>
+            </tr>
+            <tr style={{ ...styles.bold, fontSize: '10px' }}>
+              <td colSpan="5" style={styles.cell}></td>
+              {['C', 'Cr', 'Ni', 'Mo', 'Mn', 'Si', 'S', 'P'].map(c => <td key={c} style={{ ...styles.cell, width: '50px' }}>{c}</td>)}
+              <td colSpan="2" style={styles.cell}></td>
+            </tr>
             {multiSheetData[0]?.items?.map((item, idx) => (
               <tr key={idx}>
-                <td className="shaded">{item.poLi || ''}</td>
-                <td className="text-left shaded">{item.itemSize || ''}</td>
-                <td className="value-display">{item.rawMtlSize || ''}</td>
-
-                <td className="value-display" style={{ padding: '6px 4px' }}>
-                  <div className="screen-only tc-input-container">
-                    <input
-                      type="text"
-                      value={item.tcNo}
-                      onChange={(e) => updateItemField(0, idx, 'tcNo', e.target.value)}
-                      placeholder="TC No"
-                      className="tc-input"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fetchAndFillRow(0, idx, item.tcNo)}
-                      disabled={loading || !item.tcNo?.trim()}
-                      className="fetch-btn"
-                    >
-                      {loading ? (
-                        <Loader2 size={18} className="animate-spin" />
-                      ) : (
-                        <CheckCircle size={20} color="#000" />
-                      )}
-                    </button>
-                  </div>
+                <td style={styles.cell}>{item.poLi}</td>
+                <td style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>{item.itemSize}</td>
+                <td style={styles.cell}>{item.rawMtlSize}</td>
+                <td style={styles.cell}>
+                  <input
+                    style={styles.input}
+                    placeholder=""
+                    value={item.tcNo}
+                    onChange={(e) => handleTcNoChange(0, idx, e.target.value)}
+                  />
                 </td>
-
-                <td className="value-display">{item.traceability || ''}</td>
-                <td className="value-display">{item.C || ''}</td>
-                <td className="value-display">{item.Cr || ''}</td>
-                <td className="value-display">{item.Ni || ''}</td>
-                <td className="value-display">{item.Mo || ''}</td>
-                <td className="value-display">{item.Mn || ''}</td>
-                <td className="value-display">{item.Si || ''}</td>
-                <td className="value-display">{item.S || ''}</td>
-                <td className="value-display">{item.P || ''}</td>
-                <td className="shaded value-display">{item.qty || ''}</td>
-                <td className="value-display material-grade">{item.matlConfTo || ''}</td>
+                <td style={styles.cell}>{item.traceability}</td>
+                <td style={styles.cell}>{item.C}</td>
+                <td style={styles.cell}>{item.Cr}</td>
+                <td style={styles.cell}>{item.Ni}</td>
+                <td style={styles.cell}>{item.Mo}</td>
+                <td style={styles.cell}>{item.Mn}</td>
+                <td style={styles.cell}>{item.Si}</td>
+                <td style={styles.cell}>{item.S}</td>
+                <td style={styles.cell}>{item.P}</td>
+                <td style={styles.cell}>{item.qty}</td>
+                <td style={{ ...styles.cell, ...styles.textLeft }}>{item.matlConfTo}</td>
               </tr>
             ))}
+            <tr>
+              <td colSpan="15" style={{ ...styles.cell, textAlign: 'left', padding: '10px' }}>
+                TEST: ABOVE FITTINGS ARE HYDRO TESTED MAKING A SAMPLE LOOP AT REQUIRED PRESSURE WITHOUT ANY LEAKAGE.
+              </td>
+            </tr>
+            <tr>
+              <td colSpan="9" style={{ ...styles.cell, textAlign: 'left', padding: '10px' }}>
+                <span style={styles.bold}>WE GUARANTEE ABOVE MATERIAL AGAINST ANY MANUFACTURING DEFECT FOR 12 MONTHS</span>
+              </td>
+              <td colSpan="6" style={{ ...styles.cell, height: '140px', verticalAlign: 'top', padding: '10px', textAlign: 'center' }}>
+                <div style={styles.bold}>FOR Instrumentation & Controls Co. Ltd</div>
+                {selectedSign === 'sign1' && (
+                  <img src={sign1} alt="Signature 1" style={styles.signatureImg} />
+                )}
+                {selectedSign === 'sign2' && (
+                  <img src={sign2} alt="Signature 2" style={styles.signatureImg} />
+                )}
+              </td>
+            </tr>
           </tbody>
         </table>
-
-        <div className="test-notes">
-          TEST: ABOVE FITTINGS ARE HYDRO TESTED AS PER REQUIREMENT WITHOUT ANY LEAKAGE.
-        </div>
-
-        <div className="guarantee-section">
-          <div className="guarantee-text">
-            WE GUARANTEE ABOVE MATERIAL AGAINST ANY MANUFACTURING DEFECT FOR 12 MONTHS
-            FROM DATE OF SUPPLY OR 6 MONTHS FROM DATE OF INSTALLATION WHICHEVER IS EARLIER
-          </div>
-          <div className="for-company">
-            FOR Instrumentation & Controls Co. Ltd
-          </div>
-        </div>
       </div>
-    </>
+    </div>
   );
 };
 
