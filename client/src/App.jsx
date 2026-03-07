@@ -1,24 +1,48 @@
-// import React from 'react';
-// import { BrowserRouter, Routes, Route } from 'react-router-dom';
-// import Login from './components/Login';      // adjust path as needed
-// import Home from './pages/Home';            // adjust path as needed
-// import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute'; // adjust path as needed
+// import React from "react";
+// import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
+// import Login from "./components/Login";
+// import Home from "./pages/Home";
+
+// import CreateRecords from "./components/CreateRecords";
+// import CreateNewSheet from "./components/CreateNewSheet";
+// import ViewSheets from "./components/ViewSheets";
+// import RecordsLimitValues from "./components/RecordsLimitValues";
+
+// import ProtectedRoute from "./components/ProtectedRoute/ProtectedRoute";
 
 // function App() {
 //   return (
 //     <BrowserRouter>
 //       <Routes>
-//         {/* Public routes */}
-//         <Route path="/" element={<Login />} />
 
-//         {/* Protected routes */}
+//         {/* Public Route */}
+//         <Route path="/login" element={<Login />} />
+
+//         {/* Redirect root */}
+//         <Route path="/" element={<Navigate to="/login" replace />} />
+
+//         {/* Protected Routes */}
 //         <Route element={<ProtectedRoute />}>
-//           <Route path="/home" element={<Home />} />
-//           {/* Add more protected pages here later */}
+          
+//           {/* Home Layout */}
+//           <Route path="/home" element={<Home />}>
+
+//             {/* Default tab */}
+//             <Route index element={<Navigate to="create-records" replace />} />
+
+//             <Route path="create-records" element={<CreateRecords />} />
+//             <Route path="create-sheet" element={<CreateNewSheet />} />
+//             <Route path="view-sheets" element={<ViewSheets />} />
+//             <Route path="set-record-limit" element={<RecordsLimitValues />} />
+
+//           </Route>
+
 //         </Route>
 
-//         {/* Optional: redirect unknown paths to login */}
-//         <Route path="*" element={<Login />} />
+//         {/* Catch invalid routes */}
+//         <Route path="*" element={<Navigate to="/login" replace />} />
+
 //       </Routes>
 //     </BrowserRouter>
 //   );
@@ -38,36 +62,43 @@
 
 
 
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './components/Login';           // adjust path as needed
-import Home from './pages/Home';                 // adjust path as needed
-import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute'; // adjust path
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
+import Login from "./components/Login";
+import Home from "./pages/Home";
+
+import CreateRecords from "./components/CreateRecords";
+import CreateNewSheet from "./components/CreateNewSheet";
+import ViewSheets from "./components/ViewSheets";
+import RecordsLimitValues from "./components/RecordsLimitValues";
+
+import ProtectedRoute from "./components/ProtectedRoute/ProtectedRoute";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* Public: Login page */}
-        <Route path="/login" element={<Login />} />
+        {/* Login page */}
+        <Route path="/" element={<Login />} />
 
-        {/* Root path → redirect depending on auth status */}
-        <Route
-          path="/"
-          element={<Navigate to="/login" replace />}
-        />
-
-        {/* All protected routes wrapped in ProtectedRoute */}
+        {/* Protected layout */}
         <Route element={<ProtectedRoute />}>
-          <Route path="/home" element={<Home />} />
-          {/* Add more protected routes here when needed */}
-          {/* <Route path="/profile" element={<Profile />} /> */}
-          {/* <Route path="/dashboard" element={<Dashboard />} /> */}
+
+          <Route element={<Home />}>
+
+            <Route path="/create-records" element={<CreateRecords />} />
+            <Route path="/create-sheet" element={<CreateNewSheet />} />
+            <Route path="/view-sheets" element={<ViewSheets />} />
+            <Route path="/set-record-limit" element={<RecordsLimitValues />} />
+
+          </Route>
+
         </Route>
 
-        {/* Catch-all → redirect to login (prevents blank page on mistyped URL) */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Redirect unknown routes */}
+        <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>
     </BrowserRouter>

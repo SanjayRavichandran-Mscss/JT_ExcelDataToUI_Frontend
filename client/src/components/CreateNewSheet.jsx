@@ -14,7 +14,7 @@
 //   const [fileName, setFileName] = useState('');
 //   const [loading, setLoading] = useState(false);
 //   const [submitLoading, setSubmitLoading] = useState(false);
-//   const [selectedSign, setSelectedSign] = useState('none');
+//   const [selectedSign, setSelectedSign] = useState('none'); // 'none', 'sign1', 'sign2'
 //   const certificateRef = useRef(null);
 //   const fileInputRef = useRef(null);
 
@@ -159,12 +159,17 @@
 //     }
 //   };
 
-//   // --- NEW SUBMIT FUNCTION ---
+//   // --- UPDATED SUBMIT FUNCTION ---
 //   const handleSubmitCertificate = async () => {
 //     if (multiSheetData.length === 0) return;
 
 //     setSubmitLoading(true);
 //     const data = multiSheetData[0];
+
+//     // Map selectedSign to number
+//     let signatureValue = 0;
+//     if (selectedSign === 'sign1') signatureValue = 1;
+//     if (selectedSign === 'sign2') signatureValue = 2;   // ← change to 3 if you want
 
 //     const payload = {
 //       cert_no: data.headers.certNo,
@@ -174,6 +179,7 @@
 //       customer_name: data.headers.customerName,
 //       po_no: data.headers.poNo,
 //       po_date: data.headers.poDate,
+//       signature: signatureValue,                    // ← NEW FIELD
 //       items: data.items.map(item => ({
 //         po_lineitem_no: item.poLi,
 //         item_size: item.itemSize,
@@ -204,7 +210,7 @@
 //       if (result.success) {
 //         alert('Certificate stored in database successfully!');
 //       } else {
-//         alert('Failed to store: ' + result.error);
+//         alert('Failed to store: ' + (result.error || 'Unknown error'));
 //       }
 //     } catch (error) {
 //       console.error('Submit error:', error);
@@ -260,7 +266,7 @@
 //             {fileName ? fileName : "Upload Excel"}
 //           </button>
 
-//           {/* SUBMIT BUTTON: Only enabled if data is present */}
+//           {/* SUBMIT BUTTON */}
 //           {multiSheetData.length > 0 && (
 //             <button 
 //               onClick={handleSubmitCertificate} 
@@ -275,24 +281,36 @@
 //               {submitLoading ? 'Saving...' : 'Submit'}
 //             </button>
 //           )}
-
-//           {/* {multiSheetData.length > 0 && (
-//             <button onClick={downloadAsPDF} style={{ padding: '10px 20px', cursor: 'pointer', background: '#000', color: '#fff', marginLeft: '10px', borderRadius: '4px', border: 'none' }}>
-//               {loading ? 'Processing...' : <><Download size={14} style={{ marginRight: '5px', verticalAlign: 'middle' }} /> Download PDF</>}
-//             </button>
-//           )} */}
 //         </div>
 
 //         <div>
 //           <span style={{ fontWeight: 'bold' }}>Select Signature:</span>
 //           <label style={styles.radioLabel}>
-//             <input type="radio" name="sig" value="none" checked={selectedSign === 'none'} onChange={(e) => setSelectedSign(e.target.value)} /> None
+//             <input 
+//               type="radio" 
+//               name="sig" 
+//               value="none" 
+//               checked={selectedSign === 'none'} 
+//               onChange={(e) => setSelectedSign(e.target.value)} 
+//             /> none
 //           </label>
 //           <label style={styles.radioLabel}>
-//             <input type="radio" name="sig" value="sign1" checked={selectedSign === 'sign1'} onChange={(e) => setSelectedSign(e.target.value)} /> Sign 1
+//             <input 
+//               type="radio" 
+//               name="sig" 
+//               value="sign1" 
+//               checked={selectedSign === 'sign1'} 
+//               onChange={(e) => setSelectedSign(e.target.value)} 
+//             /> JUNAID KHAN
 //           </label>
 //           <label style={styles.radioLabel}>
-//             <input type="radio" name="sig" value="sign2" checked={selectedSign === 'sign2'} onChange={(e) => setSelectedSign(e.target.value)} /> Sign 2
+//             <input 
+//               type="radio" 
+//               name="sig" 
+//               value="sign2" 
+//               checked={selectedSign === 'sign2'} 
+//               onChange={(e) => setSelectedSign(e.target.value)} 
+//             /> SAIKIRAN
 //           </label>
 //         </div>
 //       </div>
@@ -447,13 +465,6 @@
 
 
 
-
-
-
-
-
-
-
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { Download, Save } from 'lucide-react';
@@ -549,7 +560,7 @@ const CreateNewSheet = () => {
           traceability: jobColIndex >= 0 ? String(get(XLSX.utils.encode_cell({ r, c: jobColIndex })) || '').trim() : '',
           rawMtlSize: '',
           tcNo: '',
-          C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '',
+          C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', Cu: '', Fe: '', Co: '',
           qty: qtyColIndex >= 0 ? String(get(XLSX.utils.encode_cell({ r, c: qtyColIndex })) || '').trim() : '',
           matlConfTo: '',
         });
@@ -579,7 +590,7 @@ const CreateNewSheet = () => {
     if (!tcNoValue.trim()) {
       updatedData[sheetIndex].items[itemIndex] = {
         ...updatedData[sheetIndex].items[itemIndex],
-        rawMtlSize: '', C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', matlConfTo: ''
+        rawMtlSize: '', C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', Cu: '', Fe: '', Co: '', matlConfTo: ''
       };
       setMultiSheetData(updatedData);
       return;
@@ -599,6 +610,7 @@ const CreateNewSheet = () => {
           rawMtlSize: record.size || '',
           C: record.c || '', Cr: record.cr || '', Ni: record.ni || '', Mo: record.mo || '',
           Mn: record.mn || '', Si: record.si || '', S: record.s || '', P: record.p || '',
+          Cu: record.cu || '', Fe: record.fe || '', Co: record.co || '',
           matlConfTo: record.material_grade || '',
         };
         setMultiSheetData(finalData);
@@ -606,13 +618,24 @@ const CreateNewSheet = () => {
         const finalData = [...multiSheetData];
         finalData[sheetIndex].items[itemIndex] = {
           ...finalData[sheetIndex].items[itemIndex],
-          rawMtlSize: '', C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', matlConfTo: ''
+          rawMtlSize: '', C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', Cu: '', Fe: '', Co: '', matlConfTo: ''
         };
         setMultiSheetData(finalData);
       }
     } catch (err) {
       console.error(err);
     }
+  };
+
+  // Helper function to format chemical values - replace 0 or 0.000 with "-"
+  const formatChemicalValue = (value) => {
+    if (!value || value === '') return '';
+    const numValue = parseFloat(value);
+    // Check if it's 0 or 0.000 (considering floating point precision)
+    if (numValue === 0 || Math.abs(numValue) < 0.0001) {
+      return '-';
+    }
+    return value;
   };
 
   // --- UPDATED SUBMIT FUNCTION ---
@@ -651,7 +674,10 @@ const CreateNewSheet = () => {
         mn: item.Mn,
         si: item.Si,
         s: item.S,
-        p: item.P
+        p: item.P,
+        cu: item.Cu,
+        fe: item.Fe,
+        co: item.Co
       }))
     };
 
@@ -694,7 +720,7 @@ const CreateNewSheet = () => {
   const styles = {
     body: { fontFamily: 'Arial, sans-serif', fontSize: '11px', color: '#000' },
     topNav: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 40px', background: '#f8f9fa', borderBottom: '1px solid #ddd' },
-    reportContainer: { width: '1100px', margin: '20px auto', border: '2px solid #000', backgroundColor: 'white' },
+    reportContainer: { width: '1200px', margin: '20px auto', border: '2px solid #000', backgroundColor: 'white' },
     table: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
     cell: { border: '1px solid #000', padding: '4px 2px', textAlign: 'center', verticalAlign: 'middle', wordWrap: 'break-word' },
     bold: { fontWeight: 'bold' },
@@ -737,6 +763,24 @@ const CreateNewSheet = () => {
               {submitLoading ? 'Saving...' : 'Submit'}
             </button>
           )}
+          
+          {/* DOWNLOAD PDF BUTTON */}
+          {multiSheetData.length > 0 && (
+            <button 
+              onClick={downloadAsPDF} 
+              disabled={loading}
+              style={{
+                ...styles.submitBtn,
+                background: '#dc3545',
+                marginLeft: '10px',
+                opacity: loading ? 0.6 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <Download size={16} style={{ marginRight: '8px' }} />
+              {loading ? 'Generating...' : 'Download PDF'}
+            </button>
+          )}
         </div>
 
         <div>
@@ -775,7 +819,7 @@ const CreateNewSheet = () => {
         <table style={styles.table}>
           <tbody>
             <tr>
-              <td colSpan="9" style={{ ...styles.cell, ...styles.textLeft, borderBottom: 'none', borderRight: 'none', fontSize: '10px' }}>
+              <td colSpan="12" style={{ ...styles.cell, ...styles.textLeft, borderBottom: 'none', borderRight: 'none', fontSize: '10px' }}>
                 {hData ? hData.formatNo : 'Format No. : ICCL/QC/R/14, Rev 01, Date: 01/04/2024'}
               </td>
               <td colSpan="5" style={{ ...styles.cell, ...styles.textRight, borderBottom: 'none', borderLeft: 'none', fontSize: '10px' }}>
@@ -786,7 +830,7 @@ const CreateNewSheet = () => {
               </td>
             </tr>
             <tr>
-              <td colSpan="14" style={{ ...styles.cell, padding: '5px 15px' }}>
+              <td colSpan="18" style={{ ...styles.cell, padding: '5px 15px' }}>
                 <div style={{ textAlign: 'center' }}>
                   <span style={styles.companyTitle}>
                     {hData ? hData.companyTitleEn : 'Instrumentation & Controls Co. Ltd. (ICCL).'}
@@ -801,8 +845,8 @@ const CreateNewSheet = () => {
               </td>
             </tr>
             <tr>
-              <td colSpan="11" style={{ ...styles.cell, ...styles.bold, fontSize: '14px', height: '50px' }}>MATERIAL TESTING REPORT AND GUARANTEE CERTIFICATE</td>
-              <td colSpan="4" style={{ padding: 0, border: '1px solid #000' }}>
+              <td colSpan="13" style={{ ...styles.cell, ...styles.bold, fontSize: '14px', height: '50px' }}>MATERIAL TESTING REPORT AND GUARANTEE CERTIFICATE</td>
+              <td colSpan="5" style={{ padding: 0, border: '1px solid #000' }}>
                 <table style={styles.nestedTable}>
                   <tbody>
                     <tr>
@@ -818,9 +862,9 @@ const CreateNewSheet = () => {
               </td>
             </tr>
             <tr>
-              <td colSpan="2" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>CUSTOMER NAME</td>
-              <td colSpan="9" style={{ ...styles.cell, ...styles.textLeft }}>{hData?.customerName}</td>
-              <td colSpan="2" style={{ ...styles.cell, ...styles.bold, textAlign: 'left' }}>Delivery Note No.:</td>
+              <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>CUSTOMER NAME</td>
+              <td colSpan="10" style={{ ...styles.cell, ...styles.textLeft }}>{hData?.customerName}</td>
+              <td colSpan="3" style={{ ...styles.cell, ...styles.bold, textAlign: 'left' }}>Delivery Note No.:</td>
               <td colSpan="2" style={{ ...styles.cell, ...styles.bold, textAlign: 'left', fontSize: '13px' }}>{hData?.deliveryNoteNo}</td>
             </tr>
             <tr>
@@ -832,18 +876,20 @@ const CreateNewSheet = () => {
               <td colSpan="2" style={{ ...styles.cell, ...styles.textLeft }}>{hData?.deliveryDate}</td>
             </tr>
             <tr style={styles.bold}>
-              <td style={{ ...styles.cell, width: '35px' }}>PO<br />L/1</td>
-              <td style={{ ...styles.cell, width: '230px' }}>ITEM & SIZE</td>
-              <td style={{ ...styles.cell, width: '80px' }}>RAW<br />MTL. SIZE</td>
-              <td style={{ ...styles.cell, width: '90px' }}>T.C.NO.</td>
-              <td style={{ ...styles.cell, width: '85px' }}>Traceability<br />no-</td>
-              <td colSpan="8" style={styles.cell}>CHEMICAL COMPOSITION %</td>
+              <td style={{ ...styles.cell, width: '35px' }}>PO<br />L/I</td>
+              <td style={{ ...styles.cell, width: '200px' }}>ITEM & SIZE</td>
+              <td style={{ ...styles.cell, width: '70px' }}>RAW<br />MTL. SIZE</td>
+              <td style={{ ...styles.cell, width: '70px' }}>T.C.NO.</td>
+              <td style={{ ...styles.cell, width: '70px' }}>Traceability<br />no-</td>
+              <td colSpan="11" style={styles.cell}>CHEMICAL COMPOSITION %</td>
               <td style={{ ...styles.cell, width: '45px' }}>QTY<br />PCS</td>
-              <td style={{ ...styles.cell, width: '140px' }}>MATL.<br />Conf.To</td>
+              <td style={{ ...styles.cell, width: '120px' }}>MATL.<br />Conf.To</td>
             </tr>
             <tr style={{ ...styles.bold, fontSize: '10px' }}>
               <td colSpan="5" style={styles.cell}></td>
-              {['C', 'Cr', 'Ni', 'Mo', 'Mn', 'Si', 'S', 'P'].map(c => <td key={c} style={{ ...styles.cell, width: '50px' }}>{c}</td>)}
+              {['C', 'Cr', 'Ni', 'Mo', 'Mn', 'Si', 'S', 'P', 'Cu', 'Fe', 'Co'].map(c => (
+                <td key={c} style={{ ...styles.cell, width: '40px' }}>{c}</td>
+              ))}
               <td colSpan="2" style={styles.cell}></td>
             </tr>
             {multiSheetData[0]?.items?.map((item, idx) => (
@@ -860,28 +906,31 @@ const CreateNewSheet = () => {
                   />
                 </td>
                 <td style={styles.cell}>{item.traceability}</td>
-                <td style={styles.cell}>{item.C}</td>
-                <td style={styles.cell}>{item.Cr}</td>
-                <td style={styles.cell}>{item.Ni}</td>
-                <td style={styles.cell}>{item.Mo}</td>
-                <td style={styles.cell}>{item.Mn}</td>
-                <td style={styles.cell}>{item.Si}</td>
-                <td style={styles.cell}>{item.S}</td>
-                <td style={styles.cell}>{item.P}</td>
+                <td style={styles.cell}>{formatChemicalValue(item.C)}</td>
+                <td style={styles.cell}>{formatChemicalValue(item.Cr)}</td>
+                <td style={styles.cell}>{formatChemicalValue(item.Ni)}</td>
+                <td style={styles.cell}>{formatChemicalValue(item.Mo)}</td>
+                <td style={styles.cell}>{formatChemicalValue(item.Mn)}</td>
+                <td style={styles.cell}>{formatChemicalValue(item.Si)}</td>
+                <td style={styles.cell}>{formatChemicalValue(item.S)}</td>
+                <td style={styles.cell}>{formatChemicalValue(item.P)}</td>
+                <td style={styles.cell}>{formatChemicalValue(item.Cu)}</td>
+                <td style={styles.cell}>{formatChemicalValue(item.Fe)}</td>
+                <td style={styles.cell}>{formatChemicalValue(item.Co)}</td>
                 <td style={styles.cell}>{item.qty}</td>
                 <td style={{ ...styles.cell, ...styles.textLeft }}>{item.matlConfTo}</td>
               </tr>
             ))}
             <tr>
-              <td colSpan="15" style={{ ...styles.cell, textAlign: 'left', padding: '10px' }}>
+              <td colSpan="18" style={{ ...styles.cell, textAlign: 'left', padding: '10px' }}>
                 TEST: ABOVE FITTINGS ARE HYDRO TESTED MAKING A SAMPLE LOOP AT REQUIRED PRESSURE WITHOUT ANY LEAKAGE.
               </td>
             </tr>
             <tr>
-              <td colSpan="9" style={{ ...styles.cell, textAlign: 'left', padding: '10px' }}>
+              <td colSpan="11" style={{ ...styles.cell, textAlign: 'left', padding: '10px' }}>
                 <span style={styles.bold}>WE GUARANTEE ABOVE MATERIAL AGAINST ANY MANUFACTURING DEFECT FOR 12 MONTHS</span>
               </td>
-              <td colSpan="6" style={{ ...styles.cell, height: '140px', verticalAlign: 'top', padding: '10px', textAlign: 'center' }}>
+              <td colSpan="7" style={{ ...styles.cell, height: '140px', verticalAlign: 'top', padding: '10px', textAlign: 'center' }}>
                 <div style={styles.bold}>FOR Instrumentation & Controls Co. Ltd</div>
                 {selectedSign === 'sign1' && (
                   <img src={sign1} alt="Signature 1" style={styles.signatureImg} />

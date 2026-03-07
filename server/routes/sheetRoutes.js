@@ -13,8 +13,19 @@ const {
   getAllCertificates,
   getCertificateById,
   updateCertificate,
-  deleteCertificate
+  deleteCertificate,
+  createLimit,
+  getAllLimits,
+  updateLimit,
+  deleteLimit,
+  getMaterialGrades,
+  getLimitsByMaterialGrade,
+  bulkuploadrecords,
+  bulkValidateExcel
 } = require('../controllers/sheetController');
+
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 // ─── Sheet Routes ────────────────────────────────────────────────
 router.get('/test', testSheet);                     // GET /api/sheet/test
@@ -45,5 +56,23 @@ router.get('/get-all-certificates', getAllCertificates);
 router.get('/get-certificate/:id', getCertificateById);
 router.put('/update-certificate/:id', updateCertificate);
 router.delete('/delete-certificate/:id', deleteCertificate);
+
+
+
+
+// In sheetRoutes.js — add these lines
+router.get('/material-grades', getMaterialGrades);
+router.post('/limits', createLimit);
+router.get('/limits', getAllLimits);
+router.put('/limits/:id', updateLimit);
+router.delete('/limits/:id', deleteLimit);
+
+
+// In sheetRoutes.js — add this line
+router.get('/limits-by-grade', getLimitsByMaterialGrade);
+
+
+router.post('/bulk-validate', upload.single('file'), bulkValidateExcel);
+router.post('/bulk-records', upload.single('file'), bulkuploadrecords);
 
 module.exports = router;

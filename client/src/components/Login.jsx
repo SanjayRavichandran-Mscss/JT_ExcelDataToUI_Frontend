@@ -1,114 +1,162 @@
-// import React, { useState } from 'react';
-// import { useNavigate } from 'react-router-dom';
+// import React, { useState, useEffect } from "react";
+// import { useNavigate } from "react-router-dom";
+// import logo from "./Assets/logo.png";
 
 // const Login = () => {
-//   const [email, setEmail] = useState('');
-//   const [password, setPassword] = useState('');
-//   const [message, setMessage] = useState('');
+
+//   const [email, setEmail] = useState("");
+//   const [password, setPassword] = useState("");
+//   const [message, setMessage] = useState("");
 //   const [loading, setLoading] = useState(false);
 
 //   const navigate = useNavigate();
 
+//   // If already logged in → go to home
+//   useEffect(() => {
+//     const token = localStorage.getItem("token");
+//     if (token) {
+//       navigate("/home/create-records", { replace: true });
+//     }
+//   }, [navigate]);
+
 //   const handleSubmit = async (e) => {
+
 //     e.preventDefault();
-//     setMessage('');
 //     setLoading(true);
+//     setMessage("");
 
 //     try {
-//       const response = await fetch('http://localhost:5000/api/auth/login', {
-//         method: 'POST',
-//         headers: { 'Content-Type': 'application/json' },
-//         body: JSON.stringify({ email, password }),
+
+//       const response = await fetch("http://localhost:5000/api/auth/login", {
+//         method: "POST",
+//         headers: {
+//           "Content-Type": "application/json",
+//         },
+//         body: JSON.stringify({
+//           email,
+//           password,
+//         }),
 //       });
 
 //       const data = await response.json();
 
-//       if (data.success) {
-//         navigate('/home');
+//       if (response.ok && data.success) {
+
+//         // Save JWT token
+//         localStorage.setItem("token", data.token);
+
+//         // Redirect
+//         navigate("/home/create-records", { replace: true });
+
 //       } else {
-//         setMessage(data.message || 'Login failed');
+//         setMessage(data.message || "Invalid email or password");
 //       }
+
 //     } catch (error) {
-//       setMessage('Something went wrong. Please try again.');
-//       console.error(error);
-//     } finally {
-//       setLoading(false);
+//       console.error("Login error:", error);
+//       setMessage("Server error. Please try again.");
 //     }
+
+//     setLoading(false);
 //   };
 
 //   return (
-//     // ✅ Background changed to white
-//     <div className="min-h-screen flex items-center justify-center bg-white px-4">
-      
-//       {/* FORM NOT TOUCHED */}
-//       <div className="bg-gray-900/95 backdrop-blur-xl p-10 rounded-3xl shadow-2xl w-full max-w-sm border border-gray-700/50">
+//     <div className="min-h-screen flex items-center justify-center bg-white px-4 sm:px-6 lg:px-8">
+
+//       <div className="w-full max-w-md">
+
+//         {/* Logo */}
 //         <div className="text-center mb-10">
-//           <h2 className="text-4xl font-black bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-3">
-//             Welcome Back
+
+//           <div className="inline-block p-2 border-2 border-gray-200 rounded-xl mb-6 shadow-sm bg-white">
+//             <img
+//               src={logo}
+//               alt="Company Logo"
+//               className="h-16 w-16 object-contain"
+//               onError={(e) => {
+//                 e.target.src = "https://via.placeholder.com/64?text=Logo";
+//               }}
+//             />
+//           </div>
+
+//           <h2 className="text-3xl font-bold text-gray-900">
+//             Sign in to your account
 //           </h2>
-//           <p className="text-gray-400 text-lg">Enter your credentials</p>
+
+//           <p className="mt-3 text-gray-600">
+//             Enter your credentials to access the dashboard
+//           </p>
+
 //         </div>
 
-//         <form onSubmit={handleSubmit} className="space-y-8">
-          
-//           {/* Email */}
-//           <div>
-//             <label htmlFor="email" className="block text-sm font-semibold text-gray-300 mb-3 tracking-wide">
-//               Email Address
-//             </label>
-//             <div className="relative">
+//         {/* Card */}
+//         <div className="bg-white border border-gray-200 rounded-2xl shadow-xl p-8">
+
+//           <form onSubmit={handleSubmit} className="space-y-7">
+
+//             {/* Email */}
+//             <div>
+//               <label className="block text-sm font-medium text-gray-700 mb-2">
+//                 Email address
+//               </label>
+
 //               <input
-//                 id="email"
 //                 type="email"
+//                 required
+//                 placeholder="name@company.com"
 //                 value={email}
 //                 onChange={(e) => setEmail(e.target.value)}
-//                 placeholder="your.email@example.com"
-//                 required
-//                 className="w-full px-0 py-4 bg-transparent border-0 border-b-2 border-gray-600 text-white text-lg placeholder-gray-500 transition-all duration-500 ease-out outline-none peer"
+//                 className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
 //               />
-//               <div className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-500 ease-out peer-focus:w-full" />
 //             </div>
-//           </div>
 
-//           {/* Password */}
-//           <div>
-//             <label htmlFor="password" className="block text-sm font-semibold text-gray-300 mb-3 tracking-wide">
-//               Password
-//             </label>
-//             <div className="relative">
+//             {/* Password */}
+//             <div>
+//               <label className="block text-sm font-medium text-gray-700 mb-2">
+//                 Password
+//               </label>
+
 //               <input
-//                 id="password"
 //                 type="password"
+//                 required
+//                 placeholder="••••••••"
 //                 value={password}
 //                 onChange={(e) => setPassword(e.target.value)}
-//                 placeholder="••••••••"
-//                 required
-//                 className="w-full px-0 py-4 bg-transparent border-0 border-b-2 border-gray-600 text-white text-lg placeholder-gray-500 transition-all duration-500 ease-out outline-none peer"
+//                 className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
 //               />
-//               <div className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-500 ease-out peer-focus:w-full" />
 //             </div>
-//           </div>
 
-//           {/* Button */}
-//           <button
-//             type="submit"
-//             disabled={loading}
-//             className={`group relative w-full py-4 px-8 font-bold text-lg rounded-2xl transition-all duration-300 overflow-hidden
-//               ${
-//                 loading
-//                   ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-//                   : 'bg-gradient-to-r from-white to-gray-100 text-gray-900 hover:from-gray-100 hover:to-white shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98]'
-//               }`}
-//           >
-//             {loading ? 'Signing in...' : 'Sign In'}
-//           </button>
-//         </form>
+//             {/* Button */}
+//             <button
+//               type="submit"
+//               disabled={loading}
+//               className={`w-full py-3 rounded-xl font-semibold text-white transition
+//                 ${
+//                   loading
+//                     ? "bg-indigo-400"
+//                     : "bg-indigo-600 hover:bg-indigo-700"
+//                 }
+//               `}
+//             >
+//               {loading ? "Signing in..." : "Sign In"}
+//             </button>
 
-//         {message && (
-//           <div className="mt-8 p-4 rounded-2xl border text-center text-sm font-semibold">
-//             {message}
-//           </div>
-//         )}
+//           </form>
+
+//           {/* Message */}
+//           {message && (
+//             <div className="mt-6 p-4 rounded-xl text-center text-sm bg-red-50 text-red-700 border border-red-200">
+//               {message}
+//             </div>
+//           )}
+
+//         </div>
+
+//         {/* Footer */}
+//         <div className="mt-8 text-center text-sm text-gray-500">
+//           © {new Date().getFullYear()} Your Company
+//         </div>
+
 //       </div>
 //     </div>
 //   );
@@ -127,123 +175,166 @@
 
 
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+
+
+
+
+
+
+
+
+
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
+import logo from "./Assets/logo.png";
 
 const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('');
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
+  // If already logged in
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      navigate("/create-records", { replace: true });
+    }
+  }, [navigate]);
+
   const handleSubmit = async (e) => {
+
     e.preventDefault();
-    setMessage('');
     setLoading(true);
+    setMessage("");
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+
+      const response = await fetch("http://localhost:5000/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email,
+          password
+        })
       });
 
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // ────────────────────────────────────────
-        //  MOST IMPORTANT PART – save the token!
-        // ────────────────────────────────────────
-        localStorage.setItem('token', data.token);           // ← usually backend sends token
-        // localStorage.setItem('user', JSON.stringify(data.user));  // optional
 
-        navigate('/home', { replace: true });   // replace: true → better UX (no back to login)
+        localStorage.setItem("token", data.token);
+
+        navigate("/create-records", { replace: true });
+
       } else {
-        setMessage(data.message || 'Login failed');
+        setMessage(data.message || "Login failed");
       }
+
     } catch (error) {
-      setMessage('Something went wrong. Please try again.');
-      console.error('Login error:', error);
-    } finally {
-      setLoading(false);
+      console.error(error);
+      setMessage("Server error. Try again.");
     }
+
+    setLoading(false);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-4">
-      <div className="bg-gray-900/95 backdrop-blur-xl p-10 rounded-3xl shadow-2xl w-full max-w-sm border border-gray-700/50">
+
+      <div className="w-full max-w-md">
+
+        {/* Logo */}
         <div className="text-center mb-10">
-          <h2 className="text-4xl font-black bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-3">
-            Welcome Back
+
+          <div className="inline-block p-2 border-2 border-gray-200 rounded-xl mb-6 shadow-sm">
+            <img
+              src={logo}
+              alt="Logo"
+              className="h-16 w-16 object-contain"
+            />
+          </div>
+
+          <h2 className="text-3xl font-bold text-gray-900">
+            Sign in to your account
           </h2>
-          <p className="text-gray-400 text-lg">Enter your credentials</p>
+
+          <p className="mt-3 text-gray-600">
+            Enter your credentials to access the dashboard
+          </p>
+
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Email */}
-          <div>
-            <label htmlFor="email" className="block text-sm font-semibold text-gray-300 mb-3 tracking-wide">
-              Email Address
-            </label>
-            <div className="relative">
+        {/* Card */}
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-xl p-8">
+
+          <form onSubmit={handleSubmit} className="space-y-7">
+
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email
+              </label>
+
               <input
-                id="email"
                 type="email"
+                required
+                placeholder="name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="your.email@example.com"
-                required
-                className="w-full px-0 py-4 bg-transparent border-0 border-b-2 border-gray-600 text-white text-lg placeholder-gray-500 transition-all duration-500 ease-out outline-none peer"
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
               />
-              <div className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-500 ease-out peer-focus:w-full" />
             </div>
-          </div>
 
-          {/* Password */}
-          <div>
-            <label htmlFor="password" className="block text-sm font-semibold text-gray-300 mb-3 tracking-wide">
-              Password
-            </label>
-            <div className="relative">
+            {/* Password */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Password
+              </label>
+
               <input
-                id="password"
                 type="password"
+                required
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="w-full px-0 py-4 bg-transparent border-0 border-b-2 border-gray-600 text-white text-lg placeholder-gray-500 transition-all duration-500 ease-out outline-none peer"
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
               />
-              <div className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-500 ease-out peer-focus:w-full" />
             </div>
-          </div>
 
-          {/* Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className={`group relative w-full py-4 px-8 font-bold text-lg rounded-2xl transition-all duration-300 overflow-hidden
-              ${loading
-                ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-white to-gray-100 text-gray-900 hover:from-gray-100 hover:to-white shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98]'
+            {/* Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full py-3 rounded-xl font-semibold text-white transition
+              ${
+                loading
+                  ? "bg-indigo-400"
+                  : "bg-indigo-600 hover:bg-indigo-700"
               }`}
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
 
-        {message && (
-          <div className={`mt-8 p-4 rounded-2xl border text-center text-sm font-semibold ${
-            message.includes('failed') || message.includes('wrong')
-              ? 'bg-red-950/50 border-red-700/50 text-red-300'
-              : 'bg-green-950/50 border-green-700/50 text-green-300'
-          }`}>
-            {message}
-          </div>
-        )}
+          </form>
+
+          {/* Error message */}
+          {message && (
+            <div className="mt-6 p-4 rounded-xl text-center text-sm bg-red-50 text-red-700 border border-red-200">
+              {message}
+            </div>
+          )}
+
+        </div>
+
       </div>
+
     </div>
   );
 };
