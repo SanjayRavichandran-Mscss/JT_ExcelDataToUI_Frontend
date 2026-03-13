@@ -21,12 +21,16 @@ exports.testSheet = async (req, res) => {
     });
   }
 };
+
 exports.createRecord = async (req, res) => {
   try {
     const {
-      tc_no, heat_no, size,
+      tc_no,
+      traceability_no,        // ← NEW
+      heat_no,
+      size,
       c, cr, ni, mo, mn, si, s, p,
-      cu, fe, co,               // ← new fields
+      cu, fe, co,
       material_grade
     } = req.body;
 
@@ -39,26 +43,19 @@ exports.createRecord = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO records (
-        tc_no, heat_no, size, 
-        c, cr, ni, mo, mn, si, s, p, 
-        cu, fe, co,               -- ← added
+        tc_no, traceability_no, heat_no, size,
+        c, cr, ni, mo, mn, si, s, p,
+        cu, fe, co,
         material_grade
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tc_no.trim(),
+        traceability_no?.trim() || null,
         heat_no.trim(),
         size.trim(),
-        c || null,
-        cr || null,
-        ni || null,
-        mo || null,
-        mn || null,
-        si || null,
-        s || null,
-        p || null,
-        cu || null,               // ← added
-        fe || null,               // ← added
-        co || null,               // ← added
+        c || null, cr || null, ni || null, mo || null, mn || null,
+        si || null, s || null, p || null,
+        cu || null, fe || null, co || null,
         material_grade.trim()
       ]
     );
@@ -70,17 +67,14 @@ exports.createRecord = async (req, res) => {
     });
   } catch (error) {
     console.error('Create record error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create record',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: 'Failed to create record', error: error.message });
   }
 };
 
+
 exports.createMultipleRecords = async (req, res) => {
   try {
-    const records = req.body; // expect array of objects
+    const records = req.body; // array of objects
 
     if (!Array.isArray(records) || records.length === 0) {
       return res.status(400).json({
@@ -91,6 +85,7 @@ exports.createMultipleRecords = async (req, res) => {
 
     const values = records.map(r => [
       r.tc_no?.trim() || '',
+      r.traceability_no?.trim() || null,      // ← NEW
       r.heat_no?.trim() || '',
       r.size?.trim() || '',
       r.c || null,
@@ -101,17 +96,17 @@ exports.createMultipleRecords = async (req, res) => {
       r.si || null,
       r.s || null,
       r.p || null,
-      r.cu || null,               // ← added
-      r.fe || null,               // ← added
-      r.co || null,               // ← added
+      r.cu || null,
+      r.fe || null,
+      r.co || null,
       r.material_grade?.trim() || ''
     ]);
 
     const [result] = await db.query(
       `INSERT INTO records (
-        tc_no, heat_no, size, 
-        c, cr, ni, mo, mn, si, s, p, 
-        cu, fe, co,               -- ← added
+        tc_no, traceability_no, heat_no, size,
+        c, cr, ni, mo, mn, si, s, p,
+        cu, fe, co,
         material_grade
       ) VALUES ?`,
       [values]
@@ -124,21 +119,20 @@ exports.createMultipleRecords = async (req, res) => {
     });
   } catch (error) {
     console.error('Bulk create error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create records',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: 'Failed to create records', error: error.message });
   }
 };
 
+// -------------------------------
+// GET ALL RECORDS
+// -------------------------------
 exports.getAllRecords = async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT 
-        id, tc_no, heat_no, size, 
+        id, tc_no, traceability_no, heat_no, size,
         c, cr, ni, mo, mn, si, s, p,
-        cu, fe, co,               -- ← added
+        cu, fe, co,
         material_grade, created_at, updated_at
       FROM records
       ORDER BY created_at DESC
@@ -151,70 +145,55 @@ exports.getAllRecords = async (req, res) => {
     });
   } catch (error) {
     console.error('Get all records error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch records',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch records', error: error.message });
   }
 };
 
+// -------------------------------
+// UPDATE RECORD
+// -------------------------------
 exports.updateRecord = async (req, res) => {
   const { id } = req.params;
   const {
-    tc_no, heat_no, size,
+    tc_no,
+    traceability_no,          // ← NEW
+    heat_no,
+    size,
     c, cr, ni, mo, mn, si, s, p,
-    cu, fe, co,               // ← added
+    cu, fe, co,
     material_grade
   } = req.body;
 
   try {
     const [result] = await db.query(
       `UPDATE records SET
-        tc_no = ?, heat_no = ?, size = ?,
+        tc_no = ?, traceability_no = ?, heat_no = ?, size = ?,
         c = ?, cr = ?, ni = ?, mo = ?, mn = ?, si = ?, s = ?, p = ?,
-        cu = ?, fe = ?, co = ?,           -- ← added
+        cu = ?, fe = ?, co = ?,
         material_grade = ?,
         updated_at = NOW()
       WHERE id = ?`,
       [
         tc_no?.trim() || '',
+        traceability_no?.trim() || null,
         heat_no?.trim() || '',
         size?.trim() || '',
-        c || null,
-        cr || null,
-        ni || null,
-        mo || null,
-        mn || null,
-        si || null,
-        s || null,
-        p || null,
-        cu || null,               // ← added
-        fe || null,               // ← added
-        co || null,               // ← added
+        c || null, cr || null, ni || null, mo || null, mn || null,
+        si || null, s || null, p || null,
+        cu || null, fe || null, co || null,
         material_grade?.trim() || '',
         id
       ]
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Record not found'
-      });
+      return res.status(404).json({ success: false, message: 'Record not found' });
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'Record updated successfully'
-    });
+    res.status(200).json({ success: true, message: 'Record updated successfully' });
   } catch (error) {
     console.error('Update record error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update record',
-      error: error.message
-    });
+    res.status(500).json({ success: false, message: 'Failed to update record', error: error.message });
   }
 };
 
@@ -245,7 +224,50 @@ exports.deleteRecord = async (req, res) => {
   }
 };
 
-// Fetch single record by tc_no (using query param)
+
+
+
+
+
+
+
+
+
+// Helper: Parse size string into numeric value + unit type
+function parseSize(sizeStr) {
+  if (!sizeStr || typeof sizeStr !== 'string') return { value: null, unit: null };
+
+  const cleaned = sizeStr.trim().toLowerCase().replace(/\s+/g, '');
+
+  // 1. Fractional inch: 1/4", 3/8", 1/2"
+  let fracMatch = cleaned.match(/^(\d+)\/(\d+)"?(od)?$/i);
+  if (fracMatch) {
+    const num = parseInt(fracMatch[1], 10);
+    const den = parseInt(fracMatch[2], 10);
+    return { value: num / den, unit: 'inch' };
+  }
+
+  // 2. Decimal inch: 1", 0.75"
+  let decInch = cleaned.match(/^(\d+(?:\.\d+)?)"?(od)?$/i);
+  if (decInch) {
+    return { value: parseFloat(decInch[1]), unit: 'inch' };
+  }
+
+  // 3. mm / MM: 20mm, 25 MM, 6mm
+  let mmMatch = cleaned.match(/^(\d+(?:\.\d+)?)(mm)?$/i);
+  if (mmMatch) {
+    return { value: parseFloat(mmMatch[1]), unit: 'mm' };
+  }
+
+  // 4. K rating: 3k, 10K, 20k
+  let kMatch = cleaned.match(/^(\d+)k$/i);
+  if (kMatch) {
+    return { value: parseInt(kMatch[1], 10), unit: 'k' };
+  }
+
+  return { value: null, unit: null };
+}
+
 exports.getRecordByTcNo = async (req, res) => {
   try {
     const { tc_no } = req.query;
@@ -257,31 +279,190 @@ exports.getRecordByTcNo = async (req, res) => {
       });
     }
 
+    const cleanedTcNo = tc_no.trim();
+
+    // ─── 1. Fetch main record ────────────────────────────────────────
     const [rows] = await db.query(
       `SELECT 
         id, tc_no, heat_no, size, 
         c, cr, ni, mo, mn, si, s, p,
-        cu, fe, co,               -- ← added
+        cu, fe, co,
         material_grade, created_at, updated_at 
       FROM records 
       WHERE tc_no = ? 
       LIMIT 1`,
-      [tc_no.trim()]
+      [cleanedTcNo]
     );
 
     if (rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: `No record found with tc_no: ${tc_no}`
+        message: `No record found with tc_no: ${cleanedTcNo}`
       });
     }
 
+    const record = rows[0];
+
+    // ─── 2. Extract and normalize size value for mathematical comparison ─────
+    let normalizedSize = null;
+    let originalSize = record.size;
+
+    if (originalSize && typeof originalSize === 'string') {
+      // Extract numeric value and unit from various formats
+      // Examples: "1/4"", "3/8" OD", "1/2"", "6 MM", "10K", "20", "25 MM"
+      const sizeStr = originalSize.trim();
+      
+      // Handle fraction formats (e.g., 1/4", 3/8")
+      if (sizeStr.includes('/')) {
+        const fractionMatch = sizeStr.match(/(\d+)\/(\d+)/);
+        if (fractionMatch) {
+          const numerator = parseFloat(fractionMatch[1]);
+          const denominator = parseFloat(fractionMatch[2]);
+          if (denominator !== 0) {
+            normalizedSize = numerator / denominator;
+          }
+        }
+      } 
+      // Handle decimal formats with or without units
+      else {
+        const decimalMatch = sizeStr.match(/(\d+(?:\.\d+)?)/);
+        if (decimalMatch) {
+          normalizedSize = parseFloat(decimalMatch[1]);
+        }
+      }
+      
+      // Handle special cases like "3K", "6K", "10K", etc.
+      const kMatch = sizeStr.match(/(\d+(?:\.\d+)?)\s*K/i);
+      if (kMatch) {
+        normalizedSize = parseFloat(kMatch[1]) * 1000;
+      }
+    }
+
+    let workingPressure = null;
+    let testPressure = null;
+    let matchedSize = null;
+
+    // ─── 3. Fetch all pressure records for mathematical comparison ──────────
+    if (normalizedSize !== null) {
+      try {
+        // Get all pressure records
+        const [allPressures] = await db.query(
+          `SELECT working_pressure, test_pressure, size FROM pressures`
+        );
+
+        // Function to normalize pressure size for comparison
+        const normalizePressureSize = (pressureSize) => {
+          if (!pressureSize || typeof pressureSize !== 'string') return null;
+          
+          const ps = pressureSize.trim();
+          
+          // Handle fraction formats in pressure table
+          if (ps.includes('/')) {
+            const fractionMatch = ps.match(/(\d+)\/(\d+)/);
+            if (fractionMatch) {
+              const numerator = parseFloat(fractionMatch[1]);
+              const denominator = parseFloat(fractionMatch[2]);
+              if (denominator !== 0) {
+                return numerator / denominator;
+              }
+            }
+          }
+          
+          // Handle K values (3K, 6K, 10K, 15K, 20K, 30K)
+          const kMatch = ps.match(/(\d+(?:\.\d+)?)\s*K/i);
+          if (kMatch) {
+            return parseFloat(kMatch[1]) * 1000;
+          }
+          
+          // Handle decimal values
+          const decimalMatch = ps.match(/(\d+(?:\.\d+)?)/);
+          if (decimalMatch) {
+            return parseFloat(decimalMatch[1]);
+          }
+          
+          return null;
+        };
+
+        // Compare with tolerance for floating point precision
+        const tolerance = 0.0001;
+        
+        for (const pressure of allPressures) {
+          const pressureNormValue = normalizePressureSize(pressure.size);
+          
+          if (pressureNormValue !== null) {
+            // Mathematical comparison with tolerance
+            if (Math.abs(normalizedSize - pressureNormValue) < tolerance) {
+              workingPressure = pressure.working_pressure;
+              testPressure = pressure.test_pressure;
+              matchedSize = pressure.size;
+              break;
+            }
+            
+            // Handle inch to mm conversion if needed
+            // Assuming if one is in inches and other in mm, we might need conversion
+            // Check if the original size has inch symbol and pressure size has MM or vice versa
+            if (originalSize.includes('"') && pressure.size.toUpperCase().includes('MM')) {
+              // Convert inches to mm (1 inch = 25.4 mm)
+              const inchToMm = normalizedSize * 25.4;
+              if (Math.abs(inchToMm - pressureNormValue) < tolerance) {
+                workingPressure = pressure.working_pressure;
+                testPressure = pressure.test_pressure;
+                matchedSize = pressure.size;
+                break;
+              }
+            } else if (originalSize.toUpperCase().includes('MM') && pressure.size.includes('"')) {
+              // Convert mm to inches
+              const mmToInch = normalizedSize / 25.4;
+              if (Math.abs(mmToInch - pressureNormValue) < tolerance) {
+                workingPressure = pressure.working_pressure;
+                testPressure = pressure.test_pressure;
+                matchedSize = pressure.size;
+                break;
+              }
+            }
+          }
+        }
+      } catch (pressureError) {
+        console.error('Error fetching pressures:', pressureError);
+        // Continue with null pressures
+      }
+    }
+
+    // ─── 4. If no match found with mathematical comparison, try direct string match ──
+    if (workingPressure === null && originalSize) {
+      try {
+        const [directMatch] = await db.query(
+          `SELECT working_pressure, test_pressure, size 
+           FROM pressures 
+           WHERE size = ? 
+           LIMIT 1`,
+          [originalSize.trim()]
+        );
+        
+        if (directMatch.length > 0) {
+          workingPressure = directMatch[0].working_pressure;
+          testPressure = directMatch[0].test_pressure;
+          matchedSize = directMatch[0].size;
+        }
+      } catch (directMatchError) {
+        console.error('Error in direct match:', directMatchError);
+      }
+    }
+
+    // ─── 5. Final response with detailed information ───────────────────────────
     res.status(200).json({
       success: true,
-      record: rows[0]
+      record: {
+        ...record,
+        normalized_value: normalizedSize,
+        matched_pressure_size: matchedSize || null,
+        working_pressure: workingPressure,
+        test_pressure: testPressure,
+        pressure_match_method: matchedSize ? (matchedSize === originalSize ? 'direct_match' : 'mathematical_match') : 'no_match'
+      }
     });
   } catch (error) {
-    console.error('Error fetching record by tc_no:', error);
+    console.error('Error in getRecordByTcNo:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch record',
@@ -292,325 +473,393 @@ exports.getRecordByTcNo = async (req, res) => {
 
 
 
-
-
+// controllers/certificateController.js  (example)
 exports.createCertificate = async (req, res) => {
-    const connection = await db.getConnection();
-    try {
-        await connection.beginTransaction();
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
 
-        const {
-            cert_no,
-            cert_date,
-            delivery_note_no,
-            delivery_date,
-            customer_name,
-            po_no,
-            po_date,
-            items = [],
-            signature = 0   // default to 0 (none)
-        } = req.body;
+    const {
+      cert_no,
+      cert_date,
+      delivery_note_no,
+      delivery_date,
+      customer_name,
+      po_no,
+      po_date,
+      items = [],
+      signature = 0,
+      test_line_items = [],     // ← this is now coming from frontend
+    } = req.body;
 
-        // 1. Insert header
-        const [headerResult] = await connection.query(
-            `INSERT INTO certificate_details 
-             (cert_no, cert_date, delivery_note_no, delivery_date, customer_name, po_no, po_date, signature)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [cert_no, cert_date, delivery_note_no, delivery_date, customer_name, po_no, po_date, signature]
-        );
+    const validSignature = [0, 1, 2].includes(Number(signature))
+      ? Number(signature)
+      : 0;
 
-        const certificate_id = headerResult.insertId;
+    // 1. Insert header
+    const [headerResult] = await connection.query(
+      `INSERT INTO certificate_details 
+      (cert_no, cert_date, delivery_note_no, delivery_date, customer_name, po_no, po_date, signature, test_line_items)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        cert_no,
+        cert_date,
+        delivery_note_no || null,
+        delivery_date || null,
+        customer_name || null,
+        po_no || null,
+        po_date || null,
+        validSignature,
+        JSON.stringify(test_line_items),   // ← stored as JSON array
+      ]
+    );
 
-        // 2. Insert items if any
-        if (items.length > 0) {
-            const itemValues = items.map(item => [
-                certificate_id,
-                item.po_lineitem_no,
-                item.item_size,
-                item.raw_material_size,
-                item.tc_no,
-                item.traceability_no,
-                item.qty_pcs,
-                item.material_grade,
-                item.c,
-                item.cr,
-                item.ni,
-                item.mo,
-                item.mn,
-                item.si,
-                item.s,
-                item.p,
-                item.cu || '',  // New field
-                item.fe || '',  // New field
-                item.co || ''   // New field
-            ]);
+    const certificate_id = headerResult.insertId;
 
-            await connection.query(
-                `INSERT INTO certificate_records (
-                    certificate_id, po_lineitem_no, item_size, raw_material_size,
-                    tc_no, traceability_no, qty_pcs, material_grade,
-                    c, cr, ni, mo, mn, si, s, p, cu, fe, co
-                ) VALUES ?`,
-                [itemValues]
-            );
-        }
+    // 2. Insert items
+    if (items.length > 0) {
+      const itemValues = items.map((item) => [
+        certificate_id,
+        item.po_lineitem_no || null,
+        item.item_size || null,
+        item.raw_material_size || null,
+        item.tc_no || null,
+        item.traceability_no || null,
+        item.qty_pcs || null,
+        item.material_grade || null,
+        item.c || null,
+        item.cr || null,
+        item.ni || null,
+        item.mo || null,
+        item.mn || null,
+        item.si || null,
+        item.s || null,
+        item.p || null,
+        item.cu || null,
+        item.fe || null,
+        item.co || null,
+      ]);
 
-        await connection.commit();
-        res.status(201).json({
-            success: true,
-            message: "Certificate created",
-            certificateId: certificate_id
-        });
-    } catch (error) {
-        await connection.rollback();
-        console.error('Create certificate error:', error);
-        res.status(500).json({ success: false, error: error.message });
-    } finally {
-        connection.release();
+      await connection.query(
+        `INSERT INTO certificate_records (
+            certificate_id, po_lineitem_no, item_size, raw_material_size,
+            tc_no, traceability_no, qty_pcs, material_grade,
+            c, cr, ni, mo, mn, si, s, p, cu, fe, co
+          ) VALUES ?`,
+        [itemValues]
+      );
     }
+
+    await connection.commit();
+
+    res.status(201).json({
+      success: true,
+      message: 'Certificate created successfully',
+      certificateId: certificate_id,
+      cert_no,
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Create certificate error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create certificate'
+    });
+  } finally {
+    connection.release();
+  }
 };
-// Update Certificate
-exports.updateCertificate = async (req, res) => {
+
+  
+  exports.updateCertificate = async (req, res) => {
     const { id } = req.params;
     const connection = await db.getConnection();
 
     try {
-        await connection.beginTransaction();
+      await connection.beginTransaction();
 
-        const {
-            cert_no,
-            cert_date,
-            delivery_note_no,
-            delivery_date,
-            customer_name,
-            po_no,
-            po_date,
-            signature = 0,
-            items = [],           // array of objects from frontend
-        } = req.body;
+      const {
+        cert_no,
+        cert_date,
+        delivery_note_no,
+        delivery_date,
+        customer_name,
+        po_no,
+        po_date,
+        signature = 0,
+        items = [],
+        test_line_items = [],   // ← NEW
+      } = req.body;
 
-        // 1. Update header (always)
+      // 1. Update header (always)
+      await connection.query(
+        `UPDATE certificate_details 
+        SET cert_no          = ?,
+            cert_date        = ?,
+            delivery_note_no = ?,
+            delivery_date    = ?,
+            customer_name    = ?,
+            po_no            = ?,
+            po_date          = ?,
+            signature        = ?,
+            test_line_items  = ?,
+            updated_at       = NOW()
+        WHERE id = ?`,
+        [
+          cert_no,
+          cert_date,
+          delivery_note_no,
+          delivery_date,
+          customer_name,
+          po_no,
+          po_date,
+          signature,
+          JSON.stringify(test_line_items),
+          id,
+        ]
+      );
+
+      // 2. Get current items from DB
+      const [existingItems] = await connection.query(
+        `SELECT id FROM certificate_records WHERE certificate_id = ?`,
+        [id]
+      );
+
+      const existingIds = new Set(existingItems.map((row) => row.id));
+
+      // 3. Process incoming items
+      for (const item of items) {
+        if (item.id) {
+          // Update existing record
+          await connection.query(
+            `UPDATE certificate_records 
+            SET po_lineitem_no    = ?,
+                item_size         = ?,
+                raw_material_size = ?,
+                tc_no             = ?,
+                traceability_no   = ?,
+                qty_pcs           = ?,
+                material_grade    = ?,
+                c                 = ?,
+                cr                = ?,
+                ni                = ?,
+                mo                = ?,
+                mn                = ?,
+                si                = ?,
+                s                 = ?,
+                p                 = ?,
+                cu                = ?,
+                fe                = ?,
+                co                = ?
+            WHERE id = ? AND certificate_id = ?`,
+            [
+              item.po_lineitem_no || null,
+              item.item_size || null,
+              item.raw_material_size || null,
+              item.tc_no || null,
+              item.traceability_no || null,
+              item.qty_pcs || null,
+              item.material_grade || null,
+              item.c || null,
+              item.cr || null,
+              item.ni || null,
+              item.mo || null,
+              item.mn || null,
+              item.si || null,
+              item.s || null,
+              item.p || null,
+              item.cu || null,
+              item.fe || null,
+              item.co || null,
+              item.id,
+              id,
+            ]
+          );
+
+          existingIds.delete(item.id); // mark as kept
+        } else {
+          // Insert new item
+          await connection.query(
+            `INSERT INTO certificate_records (
+                certificate_id, po_lineitem_no, item_size, raw_material_size,
+                tc_no, traceability_no, qty_pcs, material_grade,
+                c, cr, ni, mo, mn, si, s, p, cu, fe, co
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              id,
+              item.po_lineitem_no || null,
+              item.item_size || null,
+              item.raw_material_size || null,
+              item.tc_no || null,
+              item.traceability_no || null,
+              item.qty_pcs || null,
+              item.material_grade || null,
+              item.c || null,
+              item.cr || null,
+              item.ni || null,
+              item.mo || null,
+              item.mn || null,
+              item.si || null,
+              item.s || null,
+              item.p || null,
+              item.cu || null,
+              item.fe || null,
+              item.co || null,
+            ]
+          );
+        }
+      }
+
+      // 4. Delete removed items
+      if (existingIds.size > 0) {
+        const idsToDelete = Array.from(existingIds);
         await connection.query(
-            `UPDATE certificate_details 
-             SET cert_no       = ?,
-                 cert_date     = ?,
-                 delivery_note_no = ?,
-                 delivery_date = ?,
-                 customer_name = ?,
-                 po_no         = ?,
-                 po_date       = ?,
-                 signature     = ?
-             WHERE id = ?`,
-            [cert_no, cert_date, delivery_note_no, delivery_date, customer_name, po_no, po_date, signature, id]
+          `DELETE FROM certificate_records 
+          WHERE id IN (${idsToDelete.map(() => '?').join(',')}) 
+          AND certificate_id = ?`,
+          [...idsToDelete, id]
         );
+      }
 
-        // 2. Get current items from DB (to know what to delete/update/insert)
-        const [existingItems] = await connection.query(
-            `SELECT id FROM certificate_records WHERE certificate_id = ?`,
-            [id]
-        );
-
-        const existingIds = new Set(existingItems.map(row => row.id));
-
-        // 3. Process incoming items
-        for (const item of items) {
-            if (item.id) {
-                // Update existing record
-                await connection.query(
-                    `UPDATE certificate_records 
-                     SET po_lineitem_no    = ?,
-                         item_size         = ?,
-                         raw_material_size = ?,
-                         tc_no             = ?,
-                         traceability_no   = ?,
-                         qty_pcs           = ?,
-                         material_grade    = ?,
-                         c                 = ?,
-                         cr                = ?,
-                         ni                = ?,
-                         mo                = ?,
-                         mn                = ?,
-                         si                = ?,
-                         s                 = ?,
-                         p                 = ?,
-                         cu                = ?,
-                         fe                = ?,
-                         co                = ?
-                     WHERE id = ? AND certificate_id = ?`,
-                    [
-                        item.po_lineitem_no || null,
-                        item.item_size || null,
-                        item.raw_material_size || null,
-                        item.tc_no || null,
-                        item.traceability_no || null,
-                        item.qty_pcs || null,
-                        item.material_grade || null,
-                        item.c || null,
-                        item.cr || null,
-                        item.ni || null,
-                        item.mo || null,
-                        item.mn || null,
-                        item.si || null,
-                        item.s || null,
-                        item.p || null,
-                        item.cu || null,  // New field
-                        item.fe || null,  // New field
-                        item.co || null,  // New field
-                        item.id,
-                        id
-                    ]
-                );
-
-                existingIds.delete(item.id); // mark as kept
-            } else {
-                // Insert new item
-                await connection.query(
-                    `INSERT INTO certificate_records (
-                        certificate_id, po_lineitem_no, item_size, raw_material_size,
-                        tc_no, traceability_no, qty_pcs, material_grade,
-                        c, cr, ni, mo, mn, si, s, p, cu, fe, co
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [
-                        id,
-                        item.po_lineitem_no || null,
-                        item.item_size || null,
-                        item.raw_material_size || null,
-                        item.tc_no || null,
-                        item.traceability_no || null,
-                        item.qty_pcs || null,
-                        item.material_grade || null,
-                        item.c || null,
-                        item.cr || null,
-                        item.ni || null,
-                        item.mo || null,
-                        item.mn || null,
-                        item.si || null,
-                        item.s || null,
-                        item.p || null,
-                        item.cu || null,  // New field
-                        item.fe || null,  // New field
-                        item.co || null   // New field
-                    ]
-                );
-            }
-        }
-
-        // 4. Delete items that were removed (still in existingIds)
-        if (existingIds.size > 0) {
-            const idsToDelete = Array.from(existingIds);
-            await connection.query(
-                `DELETE FROM certificate_records 
-                 WHERE id IN (${idsToDelete.map(() => '?').join(',')}) 
-                 AND certificate_id = ?`,
-                [...idsToDelete, id]
-            );
-        }
-
-        await connection.commit();
-        res.status(200).json({ success: true, message: "Certificate updated successfully" });
+      await connection.commit();
+      res.status(200).json({ success: true, message: 'Certificate updated successfully' });
     } catch (error) {
-        await connection.rollback();
-        console.error('Update certificate error:', error);
-        res.status(500).json({ success: false, error: error.message });
+      await connection.rollback();
+      console.error('Update certificate error:', error);
+      res.status(500).json({ success: false, error: error.message });
     } finally {
-        connection.release();
+      connection.release();
     }
-};
+  };
 
-// Get All Certificates (Summary)
-exports.getAllCertificates = async (req, res) => {
+
+  exports.getAllCertificates = async (req, res) => {
     try {
-        const [rows] = await db.query(`
-            SELECT h.*, COUNT(r.id) as item_count 
-            FROM certificate_details h 
-            LEFT JOIN certificate_records r ON h.id = r.certificate_id 
-            GROUP BY h.id 
-            ORDER BY h.created_at DESC
-        `);
-        res.status(200).json({ success: true, certificates: rows });
+      const [rows] = await db.query(`
+        SELECT 
+          h.*,
+          COUNT(r.id) as item_count,
+          JSON_LENGTH(h.test_line_items) as test_messages_count
+        FROM certificate_details h 
+        LEFT JOIN certificate_records r ON h.id = r.certificate_id 
+        GROUP BY h.id 
+        ORDER BY h.created_at DESC
+      `);
+
+      res.status(200).json({
+        success: true,
+        certificates: rows,
+      });
     } catch (error) {
-        console.error('Get all certificates error:', error);
-        res.status(500).json({ success: false, error: error.message });
+      console.error('Get all certificates error:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
-};
-
-// Get Certificate By ID (with all items including new fields)
-exports.getCertificateById = async (req, res) => {
-    try {
-        const [headers] = await db.query(
-            "SELECT * FROM certificate_details WHERE id = ?",
-            [req.params.id]
-        );
-
-        if (headers.length === 0) {
-            return res.status(404).json({ success: false, message: "Certificate not found" });
-        }
-
-        const [items] = await db.query(
-            "SELECT * FROM certificate_records WHERE certificate_id = ?",
-            [req.params.id]
-        );
-
-        res.status(200).json({
-            success: true,
-            data: {
-                ...headers[0],
-                items
-            }
-        });
-    } catch (error) {
-        console.error('Get certificate by id error:', error);
-        res.status(500).json({ success: false, error: error.message });
-    }
-};
+  };
 
 exports.getCertificateById = async (req, res) => {
-    try {
-        const [headers] = await db.query(
-            "SELECT * FROM certificate_details WHERE id = ?",
-            [req.params.id]
-        );
+  try {
+    const [headers] = await db.query(
+      `SELECT * FROM certificate_details WHERE id = ?`,
+      [req.params.id]
+    );
 
-        if (headers.length === 0) {
-            return res.status(404).json({ success: false, message: "Certificate not found" });
-        }
-
-        const [items] = await db.query(
-            "SELECT * FROM certificate_records WHERE certificate_id = ?",
-            [req.params.id]
-        );
-
-        res.status(200).json({
-            success: true,
-            data: {
-                ...headers[0],
-                items
-            }
-        });
-    } catch (error) {
-        console.error('Get certificate by id error:', error);
-        res.status(500).json({ success: false, error: error.message });
+    if (headers.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Certificate not found',
+      });
     }
+
+    const header = headers[0];
+
+    // Handle test_line_items — it can come as:
+    // 1. Already parsed array/object (mysql2 auto-parsing)
+    // 2. Raw JSON string (older mysql2 or different config)
+    let testItems = [];
+
+    if (header.test_line_items) {
+      if (Array.isArray(header.test_line_items)) {
+        // Already an array → use directly
+        testItems = header.test_line_items;
+      } else if (typeof header.test_line_items === 'object') {
+        // It's an object (rare, but possible) → convert to array
+        testItems = [JSON.stringify(header.test_line_items)];
+      } else if (typeof header.test_line_items === 'string') {
+        // Raw string → try to parse
+        try {
+          const parsed = JSON.parse(header.test_line_items.trim());
+          testItems = Array.isArray(parsed) ? parsed : [parsed];
+        } catch (parseErr) {
+          console.error('JSON parse failed on string:', parseErr);
+          // Fallback: treat the whole string as one message
+          testItems = [header.test_line_items.trim()];
+        }
+      }
+    }
+
+    // Clean up: remove empty/invalid entries
+    testItems = testItems.filter(
+      msg => typeof msg === 'string' && msg.trim().length > 0
+    );
+
+    // Assign cleaned array
+    header.test_line_items = testItems;
+
+    // Fetch items
+    const [items] = await db.query(
+      'SELECT * FROM certificate_records WHERE certificate_id = ?',
+      [req.params.id]
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...header,
+        items,
+      },
+    });
+  } catch (error) {
+    console.error('Get certificate by id error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 };
 
-exports.deleteCertificate = async (req, res) => {
+
+  exports.deleteCertificate = async (req, res) => {
     const { id } = req.params;
+    const connection = await db.getConnection();
+
     try {
-        // Optional: also delete related records
-        await db.query("DELETE FROM certificate_records WHERE certificate_id = ?", [id]);
-        const [result] = await db.query("DELETE FROM certificate_details WHERE id = ?", [id]);
+      await connection.beginTransaction();
 
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: "Certificate not found" });
-        }
+      // Delete child records first
+      await connection.query('DELETE FROM certificate_records WHERE certificate_id = ?', [id]);
 
-        res.status(200).json({ success: true, message: "Certificate deleted successfully" });
+      // Delete header
+      const [result] = await connection.query('DELETE FROM certificate_details WHERE id = ?', [id]);
+
+      if (result.affectedRows === 0) {
+        await connection.rollback();
+        return res.status(404).json({
+          success: false,
+          message: 'Certificate not found',
+        });
+      }
+
+      await connection.commit();
+
+      res.status(200).json({
+        success: true,
+        message: 'Certificate deleted successfully',
+      });
     } catch (error) {
-        console.error('Delete certificate error:', error);
-        res.status(500).json({ success: false, error: error.message });
+      await connection.rollback();
+      console.error('Delete certificate error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    } finally {
+      connection.release();
     }
-};
-
+  };
 
 
 
@@ -1374,3 +1623,182 @@ exports.bulkuploadrecords = async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+exports.getNextCertNumber = async (req, res) => {
+  try {
+    const now = new Date();
+    const currentYear = now.getFullYear();                    // 2026 (full year)
+    const currentMonth = (now.getMonth() + 1).toString().padStart(2, '0'); // 03
+
+    // Pattern to match current month/year certificates
+    const likePattern = `%TC/${currentMonth}/${currentYear}`;
+
+    // Get the most recent (highest number) certificate for this month/year
+    const [rows] = await db.query(
+      `
+        SELECT cert_no
+        FROM certificate_details
+        WHERE cert_no LIKE ?
+        ORDER BY 
+          CAST(SUBSTRING_INDEX(cert_no, 'TC/', 1) AS UNSIGNED) DESC
+        LIMIT 1
+      `,
+      [likePattern]
+    );
+
+    let nextNumber = 300;
+
+    if (rows.length > 0 && rows[0].cert_no) {
+      const lastCertNo = rows[0].cert_no.trim();
+
+      // Expected format:   305TC/03/2026
+      // Extract the numeric part before "TC/"
+      const match = lastCertNo.match(/^(\d+)TC\/\d{2}\/\d{4}$/);
+
+      if (match && match[1]) {
+        const lastNumber = parseInt(match[1], 10);
+        nextNumber = lastNumber + 1;
+      } else {
+        // If format is wrong → still start from 300 (or log warning)
+        console.warn(`Unexpected cert_no format: ${lastCertNo} — starting from 300`);
+      }
+    }
+
+    const nextCertNo = `${nextNumber}TC/${currentMonth}/${currentYear}`;
+
+    return res.json({
+      success: true,
+      nextCertNo,
+      currentMonth,
+      currentYear,
+      startingFrom: rows.length === 0 ? "new month/year - starting at 300" : "incremented from previous",
+    });
+  } catch (err) {
+    console.error("Error in getNextCertNumber:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate next certificate number",
+      error: err.message,
+    });
+  }
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+exports.getRecordsByTraceabilityNos = async (req, res) => {
+  try {
+    let traceabilityNos = req.query.traceability_nos;
+
+    // Handle different input formats
+    if (!traceabilityNos) {
+      return res.status(400).json({
+        success: false,
+        message: 'traceability_nos parameter is required'
+      });
+    }
+
+    // Normalize to array
+    if (typeof traceabilityNos === 'string') {
+      traceabilityNos = traceabilityNos.split(',').map(t => t.trim()).filter(Boolean);
+    } else if (Array.isArray(traceabilityNos)) {
+      traceabilityNos = traceabilityNos.map(t => String(t).trim()).filter(Boolean);
+    } else {
+      traceabilityNos = [];
+    }
+
+    if (traceabilityNos.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid traceability numbers provided'
+      });
+    }
+
+    // Prepare placeholders
+    const placeholders = traceabilityNos.map(() => '?').join(', ');
+
+    const query = `
+      SELECT 
+        id, 
+        tc_no, 
+        traceability_no, 
+        heat_no, 
+        size,
+        c, cr, ni, mo, mn, si, s, p,
+        cu, fe, co,
+        material_grade,
+        created_at, 
+        updated_at
+      FROM records 
+      WHERE traceability_no IN (${placeholders})
+      ORDER BY FIELD(traceability_no, ${placeholders})
+    `;
+
+    const [rows] = await db.query(query, [...traceabilityNos, ...traceabilityNos]);
+
+    res.status(200).json({
+      success: true,
+      count: rows.length,
+      requested: traceabilityNos,
+      records: rows,
+      message: rows.length === 0 
+        ? `No matching records found for ${traceabilityNos.length} traceability number(s)`
+        : undefined
+    });
+
+  } catch (error) {
+    console.error('Error in getRecordsByTraceabilityNos:', error);
+
+    // More developer-friendly error response
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch records by traceability numbers',
+      error: error.message,
+      code: error.code,
+      sqlMessage: error.sqlMessage || null,
+      sql: error.sql || null
+    });
+  }
+};

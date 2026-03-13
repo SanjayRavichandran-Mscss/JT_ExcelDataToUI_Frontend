@@ -10,10 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.9",
+    "@mui/material": "^7.3.9",
     "@tailwindcss/vite": "^4.1.18",
     "axios": "^1.13.6",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.0",
+    "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.575.0",
     "multer": "^2.1.1",
     "react": "^19.2.0",

@@ -21,7 +21,9 @@ const {
   getMaterialGrades,
   getLimitsByMaterialGrade,
   bulkuploadrecords,
-  bulkValidateExcel
+  bulkValidateExcel,
+  getNextCertNumber,
+  getRecordsByTraceabilityNos
 } = require('../controllers/sheetController');
 
 const multer = require('multer');
@@ -74,5 +76,11 @@ router.get('/limits-by-grade', getLimitsByMaterialGrade);
 
 router.post('/bulk-validate', upload.single('file'), bulkValidateExcel);
 router.post('/bulk-records', upload.single('file'), bulkuploadrecords);
+
+
+
+router.get('/next-cert-number', getNextCertNumber);
+
+router.get('/records/by-traceabilities', getRecordsByTraceabilityNos);
 
 module.exports = router;
