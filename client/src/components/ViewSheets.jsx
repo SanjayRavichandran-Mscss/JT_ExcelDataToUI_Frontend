@@ -54,7 +54,7 @@ const ViewSheets = () => {
   const fetchSummary = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/sheet/get-all-certificates');
+      const response = await fetch('http://103.118.158.113.188:5000/api/sheet/get-all-certificates');
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Failed to fetch');
       setSheets(data.certificates || []);
@@ -74,7 +74,7 @@ const ViewSheets = () => {
     setExpandedId(id);
     if (!sheetDetails[id]) {
       try {
-        const res = await fetch(`http://localhost:5000/api/sheet/get-certificate/${id}`);
+        const res = await fetch(`http://103.118.158.113.188:5000/api/sheet/get-certificate/${id}`);
         const result = await res.json();
         if (result.success) {
           setSheetDetails(prev => ({ ...prev, [id]: result.data }));
@@ -107,7 +107,7 @@ const ViewSheets = () => {
   const handleDelete = async (id, certNo) => {
     if (!window.confirm(`Delete certificate ${certNo}?`)) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/sheet/delete-certificate/${id}`, { method: 'DELETE' });
+      const res = await fetch(`http://103.118.158.113.188:5000/api/sheet/delete-certificate/${id}`, { method: 'DELETE' });
       const result = await res.json();
       if (result.success) {
         setSheets(prev => prev.filter(s => s.id !== id));
@@ -125,7 +125,7 @@ const ViewSheets = () => {
     let data = sheetDetails[id];
     if (!data) {
       try {
-        const res = await fetch(`http://localhost:5000/api/sheet/get-certificate/${id}`);
+        const res = await fetch(`http://103.118.158.113.188:5000/api/sheet/get-certificate/${id}`);
         const json = await res.json();
         if (json.success) data = json.data;
         else {
@@ -205,7 +205,7 @@ const ViewSheets = () => {
     if (!editingCertificate?.id) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/sheet/update-certificate/${editingCertificate.id}`, {
+      const res = await fetch(`http://103.118.158.113.188:5000/api/sheet/update-certificate/${editingCertificate.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm)
@@ -216,7 +216,7 @@ const ViewSheets = () => {
         setEditModalOpen(false);
         fetchSummary();
         // Refresh detail view
-        const freshRes = await fetch(`http://localhost:5000/api/sheet/get-certificate/${editingCertificate.id}`);
+        const freshRes = await fetch(`http://103.118.158.113.188:5000/api/sheet/get-certificate/${editingCertificate.id}`);
         const fresh = await freshRes.json();
         if (fresh.success) {
           setSheetDetails(prev => ({

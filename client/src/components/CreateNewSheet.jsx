@@ -27,7 +27,7 @@
 
 //   const fetchNextCertNumber = async () => {
 //     try {
-//       const res = await fetch('http://localhost:5000/api/sheet/next-cert-number');
+//       const res = await fetch('http://103.118.158.113.188:5000/api/sheet/next-cert-number');
 //       const json = await res.json();
 //       if (json.success && json.nextCertNo) {
 //         setCertNo(json.nextCertNo);
@@ -176,7 +176,7 @@
 //     }
 
 //     try {
-//       const res = await fetch(`http://localhost:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
+//       const res = await fetch(`http://103.118.158.113.188:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
 //       const json = await res.json();
 
 //       if (json.success && json.record) {
@@ -292,7 +292,7 @@
 //     };
 
 //     try {
-//       const response = await fetch('http://localhost:5000/api/sheet/create-certificate', {
+//       const response = await fetch('http://103.118.158.113.188:5000/api/sheet/create-certificate', {
 //         method: 'POST',
 //         headers: { 'Content-Type': 'application/json' },
 //         body: JSON.stringify(payload),
@@ -615,7 +615,7 @@
 
 //   const fetchNextCertNumber = async () => {
 //     try {
-//       const res = await fetch('http://localhost:5000/api/sheet/next-cert-number');
+//       const res = await fetch('http://103.118.158.113.188:5000/api/sheet/next-cert-number');
 //       const json = await res.json();
 //       if (json.success && json.nextCertNo) {
 //         setCertNo(json.nextCertNo);
@@ -773,7 +773,7 @@
 //       traceabilityList.forEach(t => params.append('traceability_nos', t));
 
 //       const res = await fetch(
-//         `http://localhost:5000/api/sheet/records/by-traceabilities?${params.toString()}`
+//         `http://103.118.158.113.188:5000/api/sheet/records/by-traceabilities?${params.toString()}`
 //       );
 
 //       const json = await res.json();
@@ -885,7 +885,7 @@
 
 //     try {
 //       const res = await fetch(
-//         `http://localhost:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`
+//         `http://103.118.158.113.188:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`
 //       );
 //       const json = await res.json();
 
@@ -997,7 +997,7 @@
 //     };
 
 //     try {
-//       const response = await fetch('http://localhost:5000/api/sheet/create-certificate', {
+//       const response = await fetch('http://103.118.158.113.188:5000/api/sheet/create-certificate', {
 //         method: 'POST',
 //         headers: { 'Content-Type': 'application/json' },
 //         body: JSON.stringify(payload),
@@ -1328,7 +1328,7 @@ const CreateNewSheet = () => {
 
   const fetchNextCertNumber = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/sheet/next-cert-number');
+      const res = await fetch('http://103.118.158.113.188:5000/api/sheet/next-cert-number');
       const json = await res.json();
       if (json.success && json.nextCertNo) {
         setCertNo(json.nextCertNo);
@@ -1479,7 +1479,7 @@ const CreateNewSheet = () => {
       const params = new URLSearchParams();
       traceabilityList.forEach(t => params.append('traceability_nos', t));
 
-      const url = `http://localhost:5000/api/sheet/records/by-traceabilities?${params.toString()}`;
+      const url = `http://103.118.158.113.188:5000/api/sheet/records/by-traceabilities?${params.toString()}`;
       console.log("Fetching traceability batch from:", url);
 
       const res = await fetch(url);
@@ -1553,7 +1553,7 @@ const CreateNewSheet = () => {
             if (item.tcNo?.trim()) {
               try {
                 const tcRes = await fetch(
-                  `http://localhost:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(item.tcNo.trim())}`
+                  `http://103.118.158.113.188:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(item.tcNo.trim())}`
                 );
                 const tcJson = await tcRes.json();
 
@@ -1628,7 +1628,7 @@ const CreateNewSheet = () => {
 
     try {
       const res = await fetch(
-        `http://localhost:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`
+        `http://103.118.158.113.188:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`
       );
       const json = await res.json();
 
@@ -1744,7 +1744,7 @@ const CreateNewSheet = () => {
     };
 
     try {
-      const response = await fetch('http://localhost:5000/api/sheet/create-certificate', {
+      const response = await fetch('http://103.118.158.113.188:5000/api/sheet/create-certificate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

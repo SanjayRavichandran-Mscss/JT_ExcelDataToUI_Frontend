@@ -2,7 +2,7 @@
 // import { Plus, Edit, Trash2, X, Save, Loader2, Database, Beaker, Search, RotateCcw, Download, Upload } from 'lucide-react';
 // import Select from 'react-select';
 
-// const API_BASE = 'http://localhost:5000/api/sheet';
+// const API_BASE = 'http://103.118.158.113.188:5000/api/sheet';
 
 // const CreateRecords = () => {
 //   const [records, setRecords] = useState([]);
@@ -951,7 +951,7 @@
 // import { Plus, X, Loader2, Download, Upload, Search, RotateCcw } from 'lucide-react';
 // import Select from 'react-select';
 
-// const API_BASE = 'http://localhost:5000/api/sheet';
+// const API_BASE = 'http://103.118.158.113.188:5000/api/sheet';
 
 // const CreateRecords = () => {
 //   const [records, setRecords] = useState([]);
@@ -1885,7 +1885,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, X, Loader2, Download, Upload, Search, RotateCcw } from 'lucide-react';
 import Select from 'react-select';
 
-const API_BASE = 'http://localhost:5000/api/sheet';
+const API_BASE = 'http://103.118.158.113.188:5000/api/sheet';
 
 const CreateRecords = () => {
   const [records, setRecords] = useState([]);
