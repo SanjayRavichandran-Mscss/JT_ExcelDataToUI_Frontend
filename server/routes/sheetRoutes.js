@@ -23,7 +23,7 @@ const {
   bulkuploadrecords,
   bulkValidateExcel,
   getNextCertNumber,
-  getRecordsByTraceabilityNos
+  getRecordsByTraceabilityNos,
 } = require('../controllers/sheetController');
 
 const multer = require('multer');
@@ -82,5 +82,7 @@ router.post('/bulk-records', upload.single('file'), bulkuploadrecords);
 router.get('/next-cert-number', getNextCertNumber);
 
 router.get('/records/by-traceabilities', getRecordsByTraceabilityNos);
+
+
 
 module.exports = router;

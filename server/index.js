@@ -1,44 +1,44 @@
-const express = require('express');
-const cors = require('cors');
-const { connectDB } = require('./config/db');
+  const express = require('express');
+  const cors = require('cors');
+  const { connectDB } = require('./config/db');
 
-const app = express();
-const PORT = 5000;
+  const app = express();
+  const PORT = 5000;
 
-// Middleware
-app.use(cors());                        // Allow frontend to connect
-app.use(express.json({ limit: '10mb' }));
+  // Middleware
+  app.use(cors());                        // Allow frontend to connect
+  app.use(express.json({ limit: '10mb' }));
 
-// Routes
-const authRoutes = require('./routes/authRoutes');
-const excelRoutes = require('./routes/excelRoutes');
-const sheetRoutes = require('./routes/sheetRoutes');
+  // Routes
+  const authRoutes = require('./routes/authRoutes');
+  const excelRoutes = require('./routes/excelRoutes');
+  const sheetRoutes = require('./routes/sheetRoutes');
 
-app.use('/api/auth', authRoutes);
-app.use('/api/excel', excelRoutes);
-app.use('/api/sheet', sheetRoutes);
+  app.use('/api/auth', authRoutes);
+  app.use('/api/excel', excelRoutes);
+  app.use('/api/sheet', sheetRoutes);
 
-// Health check route (optional but useful)
-app.get('/', (req, res) => {
-  res.json({ message: 'Server is running' });
-});
+  // Health check route (optional but useful)
+  app.get('/', (req, res) => {
+    res.json({ message: 'Server is running' });
+  });
 
-const startServer = async () => {
-  try {
-    const db = await connectDB();
+  const startServer = async () => {
+    try {
+      const db = await connectDB();
 
-    // Simple test query to verify connection
-    await db.query('SELECT 1');
+      // Simple test query to verify connection
+      await db.query('SELECT 1');
 
-    console.log('Database connected successfully');
+      console.log('Database connected successfully');
 
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
-  } catch (error) {
-    console.error('Failed to connect to database:', error);
-    process.exit(1);
-  }
-};
+      app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+      });
+    } catch (error) {
+      console.error('Failed to connect to database:', error);
+      process.exit(1);
+    }
+  };
 
-startServer();
+  startServer();
