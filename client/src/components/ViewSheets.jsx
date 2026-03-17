@@ -18,7 +18,6 @@
 //   const [filterText, setFilterText] = useState('');
 //   const [editModalOpen, setEditModalOpen] = useState(false);
 //   const [editingCertificate, setEditingCertificate] = useState(null);
-
 //   const [editForm, setEditForm] = useState({
 //     cert_no: '',
 //     cert_date: '',
@@ -29,8 +28,8 @@
 //     po_date: '',
 //     signature: 0,
 //     items: [],
+//     test_line_items: [],
 //   });
-
 //   const certificateRef = useRef(null);
 
 //   useEffect(() => {
@@ -84,58 +83,35 @@
 //     }
 //   };
 
+//   // ==================== PDF DOWNLOAD ====================
 //   const handleDownloadPDF = (certNo) => {
 //     const element = certificateRef.current;
 //     if (!element) {
-//       console.error("Certificate element not found");
-//       alert("Cannot generate PDF — content not rendered");
+//       alert("Certificate element not found");
 //       return;
 //     }
-
 //     const opt = {
-//       margin:       [8, 6, 8, 6],
-//       filename:     `Certificate_${(certNo || "unknown").replace(/\//g, "-")}.pdf`,
-//       image:        { type: 'jpeg', quality: 0.94 },
-//       html2canvas:  {
-//         scale:          2.0,
-//         useCORS:        true,
-//         logging:        false,
-//         scrollX:        0,
-//         scrollY:        0,
-//         windowWidth:    1250,
-//         windowHeight:   900,
-//         letterRendering: true,
-//         allowTaint:     false,
-//         onclone: (clonedDoc) => {
-//           const style = clonedDoc.createElement('style');
-//           style.innerHTML = `
-//             @page { size: A4 landscape; margin: 6mm 8mm; }
-//             body { font-size: 11px !important; }
-//           `;
-//           clonedDoc.head.appendChild(style);
-
-//           const images = clonedDoc.querySelectorAll('img');
-//           return Promise.all(
-//             Array.from(images).map(img => 
-//               img.complete ? Promise.resolve() : 
-//               new Promise(r => { img.onload = r; img.onerror = r; })
-//             )
-//           );
-//         }
+//       margin: [8, 8, 8, 8],
+//       filename: `Certificate_${(certNo || "unknown").replace(/\//g, "-")}.pdf`,
+//       image: { type: 'jpeg', quality: 0.95 },
+//       html2canvas: {
+//         scale: 2.0,
+//         useCORS: true,
+//         logging: false,
+//         letterRendering: true
 //       },
 //       jsPDF: {
-//         unit:       'mm',
-//         format:     'a4',
+//         unit: 'mm',
+//         format: 'a4',
 //         orientation: 'landscape'
 //       },
-//       pagebreak: { 
-//         mode:      ['avoid-all', 'css', 'legacy'],
-//         before:    '.page-break-before',
-//         after:     '.page-break-after',
-//         avoid:     ['tr', '.signature-section', '.keep-together']
+//       pagebreak: {
+//         mode: ['avoid-all', 'css', 'legacy'],
+//         before: '.page-break-before',
+//         after: '.page-break-after',
+//         avoid: ['tr', '.keep-together']
 //       }
 //     };
-
 //     html2pdf()
 //       .set(opt)
 //       .from(element)
@@ -155,26 +131,19 @@
 //         setSheets(prev => prev.filter(s => s.id !== id));
 //         if (expandedId === id) setExpandedId(null);
 //         alert('Deleted successfully');
-//       } else {
-//         alert('Delete failed: ' + (result.error || 'Unknown error'));
 //       }
 //     } catch (err) {
 //       alert('Network error during delete');
 //     }
 //   };
 
-//   // ───────────────────────────────────────────────
-//   //  New helper: convert backend date → "06-Jul-25"
-//   // ───────────────────────────────────────────────
 //   const formatDateForEdit = (dateStr) => {
 //     if (!dateStr) return '';
 //     const date = new Date(dateStr);
 //     if (isNaN(date.getTime())) return '';
-
-//     const day   = date.getDate().toString().padStart(2, '0');
+//     const day = date.getDate().toString().padStart(2, '0');
 //     const month = date.toLocaleString('en-US', { month: 'short' });
-//     const year  = date.getFullYear().toString().slice(-2);
-
+//     const year = date.getFullYear().toString().slice(-2);
 //     return `${day}-${month}-${year}`;
 //   };
 
@@ -185,16 +154,11 @@
 //         const res = await fetch(`http://localhost:5000/api/sheet/get-certificate/${id}`);
 //         const json = await res.json();
 //         if (json.success) data = json.data;
-//         else {
-//           alert('Could not load data');
-//           return;
-//         }
+//         else return alert('Could not load data');
 //       } catch (err) {
-//         alert('Failed to load certificate for editing');
-//         return;
+//         return alert('Failed to load certificate for editing');
 //       }
 //     }
-
 //     setEditingCertificate(data);
 //     setEditForm({
 //       cert_no: data.cert_no || '',
@@ -206,6 +170,9 @@
 //       po_date: formatDateForEdit(data.po_date),
 //       signature: data.signature ?? 0,
 //       items: data.items ? data.items.map(item => ({ ...item })) : [],
+//       test_line_items: Array.isArray(data.test_line_items)
+//         ? [...data.test_line_items]
+//         : (typeof data.test_line_items === 'string' ? [data.test_line_items] : []),
 //     });
 //     setEditModalOpen(true);
 //   };
@@ -223,19 +190,48 @@
 //     });
 //   };
 
+//   const handleTestLineChange = (index, field, value) => {
+//     setEditForm(prev => {
+//       const newLines = [...prev.test_line_items];
+//       const currentMsg = newLines[index] || '';
+//       const liMatch = currentMsg.match(/\(L\/I:\s*([^)]*)\)/);
+//       const pressureMatch = currentMsg.match(/AT\s+([^ ]+)\s+WITHOUT/);
+//       let liPart = liMatch ? liMatch[1].trim() : '';
+//       let pressurePart = pressureMatch ? pressureMatch[1].trim() : '';
+//       if (field === 'li') liPart = value;
+//       if (field === 'pressure') pressurePart = value;
+//       newLines[index] = `TEST: ABOVE FITTINGS (L/I: ${liPart}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${pressurePart} WITHOUT ANY LEAKAGE.`;
+//       return { ...prev, test_line_items: newLines };
+//     });
+//   };
+
+//   const addNewTestLine = () => {
+//     setEditForm(prev => ({
+//       ...prev,
+//       test_line_items: [
+//         ...prev.test_line_items,
+//         "TEST: ABOVE FITTINGS (L/I: ) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT PSI WITHOUT ANY LEAKAGE."
+//       ]
+//     }));
+//   };
+
+//   const removeTestLine = (index) => {
+//     if (window.confirm("Remove this test message?")) {
+//       setEditForm(prev => ({
+//         ...prev,
+//         test_line_items: prev.test_line_items.filter((_, i) => i !== index)
+//       }));
+//     }
+//   };
+
 //   const addNewItemRow = () => {
 //     setEditForm(prev => ({
 //       ...prev,
 //       items: [
 //         ...prev.items,
 //         {
-//           po_lineitem_no: '',
-//           item_size: '',
-//           raw_material_size: '',
-//           tc_no: '',
-//           traceability_no: '',
-//           qty_pcs: '',
-//           material_grade: '',
+//           po_lineitem_no: '', item_size: '', raw_material_size: '', tc_no: '',
+//           traceability_no: '', qty_pcs: '', material_grade: '',
 //           c: '', cr: '', ni: '', mo: '', mn: '', si: '', s: '', p: '', cu: '', fe: '', co: ''
 //         }
 //       ]
@@ -253,7 +249,6 @@
 
 //   const saveUpdatedCertificate = async () => {
 //     if (!editingCertificate?.id) return;
-
 //     try {
 //       const res = await fetch(`http://localhost:5000/api/sheet/update-certificate/${editingCertificate.id}`, {
 //         method: 'PUT',
@@ -265,7 +260,6 @@
 //         alert('Certificate updated successfully');
 //         setEditModalOpen(false);
 //         fetchSummary();
-//         // Refresh detail view
 //         const freshRes = await fetch(`http://localhost:5000/api/sheet/get-certificate/${editingCertificate.id}`);
 //         const fresh = await freshRes.json();
 //         if (fresh.success) {
@@ -284,20 +278,14 @@
 
 //   const clearFilter = () => setFilterText('');
 
-// const formatChemicalValue = (value) => {
-//   if (value === undefined || value === null || value === '') return '---';
-  
-//   const numValue = parseFloat(value);
-//   if (isNaN(numValue)) return '---';
-  
-//   // Zero or very small values → show as '-'
-//   if (numValue === 0 || Math.abs(numValue) < 0.0001) return '-';
-  
-//   // Show number with exactly 3 decimal places (only if needed)
-//   // toFixed(3) will always show 3 decimals, but we trim trailing zeros
-//   const formatted = numValue.toFixed(3);
-//   return formatted.replace(/\.?0+$/, '');   // remove trailing .000 or .500 → .5
-// };
+//   const formatChemicalValue = (value) => {
+//     if (value === undefined || value === null || value === '') return '---';
+//     const numValue = parseFloat(value);
+//     if (isNaN(numValue)) return '---';
+//     if (numValue === 0 || Math.abs(numValue) < 0.0001) return '-';
+//     const formatted = numValue.toFixed(3);
+//     return formatted.replace(/\.?0+$/, '');
+//   };
 
 //   if (loading) return (
 //     <div className="min-h-screen flex items-center justify-center">
@@ -332,10 +320,7 @@
 //                   className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
 //                 />
 //                 {filterText && (
-//                   <button
-//                     onClick={clearFilter}
-//                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-//                   >
+//                   <button onClick={clearFilter} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
 //                     <X size={18} />
 //                   </button>
 //                 )}
@@ -367,42 +352,35 @@
 //                   </div>
 //                 </div>
 
-//                 {expandedId === sheet.id && (
+//                 {expandedId === sheet.id && sheetDetails[sheet.id] && (
 //                   <div className="p-6 border-t bg-gray-50">
-//                     {!sheetDetails[sheet.id] ? (
-//                       <div className="flex justify-center py-12">
-//                         <Loader2 className="animate-spin text-indigo-600" size={36} />
-//                       </div>
-//                     ) : (
-//                       <>
-//                         <div className="flex flex-wrap justify-end gap-4 mb-6">
-//                           <button
-//                             onClick={() => openEditModal(sheet.id)}
-//                             className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700"
-//                           >
-//                             <Edit size={18} /> Edit
-//                           </button>
-//                           <button
-//                             onClick={() => handleDownloadPDF(sheet.cert_no)}
-//                             className="flex items-center gap-2 bg-gray-800 text-white px-5 py-2.5 rounded-lg hover:bg-gray-900"
-//                           >
-//                             <Download size={18} /> PDF
-//                           </button>
-//                           <button
-//                             onClick={() => handleDelete(sheet.id, sheet.cert_no)}
-//                             className="flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 rounded-lg hover:bg-red-700"
-//                           >
-//                             <Trash2 size={18} /> Delete
-//                           </button>
-//                         </div>
+//                     <div className="flex flex-wrap justify-end gap-4 mb-6">
+//                       <button
+//                         onClick={() => openEditModal(sheet.id)}
+//                         className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700"
+//                       >
+//                         <Edit size={18} /> Edit
+//                       </button>
+//                       <button
+//                         onClick={() => handleDownloadPDF(sheet.cert_no)}
+//                         className="flex items-center gap-2 bg-gray-800 text-white px-5 py-2.5 rounded-lg hover:bg-gray-900"
+//                       >
+//                         <Download size={18} /> PDF
+//                       </button>
+//                       <button
+//                         onClick={() => handleDelete(sheet.id, sheet.cert_no)}
+//                         className="flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 rounded-lg hover:bg-red-700"
+//                       >
+//                         <Trash2 size={18} /> Delete
+//                       </button>
+//                     </div>
 
-//                         <CertificateLayout
-//                           data={sheetDetails[sheet.id]}
-//                           ref={certificateRef}
-//                           formatChemicalValue={formatChemicalValue}
-//                         />
-//                       </>
-//                     )}
+//                     <div ref={certificateRef}>
+//                       <CertificateLayout
+//                         data={sheetDetails[sheet.id]}
+//                         formatChemicalValue={formatChemicalValue}
+//                       />
+//                     </div>
 //                   </div>
 //                 )}
 //               </div>
@@ -411,10 +389,9 @@
 //         </div>
 //       </div>
 
-//       {/* ─── FULL SCREEN EDIT MODAL ─────────────────────────────────────────────── */}
+//       {/* ====================== EDIT MODAL ====================== */}
 //       {editModalOpen && (
 //         <div className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden">
-//           {/* Top Bar */}
 //           <div className="border-b px-6 py-4 flex items-center justify-between bg-white sticky top-0 z-10 shadow-sm">
 //             <button
 //               onClick={() => setEditModalOpen(false)}
@@ -427,39 +404,115 @@
 //             </h2>
 //             <div className="w-10"></div>
 //           </div>
-
-//           {/* Scrollable Content */}
 //           <div className="flex-1 overflow-y-auto p-6 md:p-10">
 //             <div className="max-w-6xl mx-auto space-y-14 pb-20">
-
 //               {/* Header Fields */}
 //               <section>
 //                 <h3 className="text-2xl font-bold mb-6 text-gray-900">Certificate Information</h3>
 //                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 //                   {[
-//                     { label: 'Certificate No', name: 'cert_no', type: 'text' },
-//                     { label: 'Certificate Date', name: 'cert_date', type: 'text', placeholder: '06-Jul-25' },
-//                     { label: 'Customer Name', name: 'customer_name', type: 'text' },
-//                     { label: 'P.O. Number', name: 'po_no', type: 'text' },
-//                     { label: 'P.O. Date', name: 'po_date', type: 'text', placeholder: '06-Jul-25' },
-//                     { label: 'Delivery Note No', name: 'delivery_note_no', type: 'text' },
-//                     { label: 'Delivery Date', name: 'delivery_date', type: 'text', placeholder: '06-Jul-25' },
+//                     { label: 'Certificate No', name: 'cert_no' },
+//                     { label: 'Certificate Date', name: 'cert_date', placeholder: '06-Jul-25' },
+//                     { label: 'Customer Name', name: 'customer_name' },
+//                     { label: 'P.O. Number', name: 'po_no' },
+//                     { label: 'P.O. Date', name: 'po_date', placeholder: '06-Jul-25' },
+//                     { label: 'Delivery Note No', name: 'delivery_note_no' },
+//                     { label: 'Delivery Date', name: 'delivery_date', placeholder: '06-Jul-25' },
 //                   ].map(field => (
 //                     <div key={field.name} className="flex flex-col">
 //                       <label className="text-sm font-medium text-gray-700 mb-2">{field.label}</label>
 //                       <input
-//                         type={field.type || 'text'}
+//                         type="text"
 //                         name={field.name}
 //                         value={editForm[field.name] || ''}
 //                         onChange={handleEditHeaderChange}
 //                         placeholder={field.placeholder || ''}
-//                         pattern={field.type === 'text' && field.placeholder ? "\\d{2}-[A-Za-z]{3}-\\d{2}" : undefined}
-//                         title={field.placeholder ? "Format: dd-MMM-yy (e.g. 06-Jul-25)" : undefined}
-//                         className="border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+//                         className="border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"
 //                       />
 //                     </div>
 //                   ))}
 //                 </div>
+//               </section>
+
+//               {/* Signature Selection */}
+//               <section>
+//                 <h3 className="text-2xl font-bold mb-6 text-gray-900">Signature</h3>
+//                 <div className="flex flex-wrap gap-8">
+//                   <label className="flex flex-col items-center cursor-pointer">
+//                     <input type="radio" name="signature" value={0} checked={editForm.signature === 0} onChange={() => setEditForm(prev => ({ ...prev, signature: 0 }))} className="mb-2" />
+//                     <div className="text-gray-700 font-medium">None</div>
+//                   </label>
+//                   <label className="flex flex-col items-center cursor-pointer">
+//                     <input type="radio" name="signature" value={1} checked={editForm.signature === 1} onChange={() => setEditForm(prev => ({ ...prev, signature: 1 }))} className="mb-2" />
+//                     <img src={sign1} alt="Signature 1" className="w-32 h-auto border border-gray-300 rounded shadow-sm" />
+//                     <div className="mt-2 text-gray-700 font-medium">Sign 1</div>
+//                   </label>
+//                   <label className="flex flex-col items-center cursor-pointer">
+//                     <input type="radio" name="signature" value={2} checked={editForm.signature === 2} onChange={() => setEditForm(prev => ({ ...prev, signature: 2 }))} className="mb-2" />
+//                     <img src={sign2} alt="Signature 2" className="w-32 h-auto border border-gray-300 rounded shadow-sm" />
+//                     <div className="mt-2 text-gray-700 font-medium">Sign 2</div>
+//                   </label>
+//                 </div>
+//               </section>
+
+//               {/* Hydro Test Messages */}
+//               <section>
+//                 <div className="flex justify-between items-center mb-6">
+//                   <h3 className="text-2xl font-bold text-gray-900">Hydro Test Messages</h3>
+//                   <button
+//                     onClick={addNewTestLine}
+//                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-sm transition-colors"
+//                   >
+//                     <Plus size={20} /> Add New Line
+//                   </button>
+//                 </div>
+//                 {editForm.test_line_items.length === 0 ? (
+//                   <p className="text-gray-500 italic">No test messages yet. Click "Add New Line" to create one.</p>
+//                 ) : (
+//                   <div className="space-y-8">
+//                     {editForm.test_line_items.map((msg, index) => {
+//                       const liMatch = msg.match(/\(L\/I:\s*([^)]*)\)/);
+//                       const pressureMatch = msg.match(/AT\s+([^ ]+)\s+WITHOUT/);
+//                       const liValue = liMatch ? liMatch[1].trim() : '';
+//                       const pressureValue = pressureMatch ? pressureMatch[1].trim() : '';
+//                       return (
+//                         <div key={index} className="border border-gray-300 rounded-xl p-6 bg-white relative">
+//                           <button
+//                             onClick={() => removeTestLine(index)}
+//                             className="absolute top-4 right-4 text-red-600 hover:text-red-800 transition-colors"
+//                           >
+//                             <Trash2 size={22} />
+//                           </button>
+//                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+//                             <div>
+//                               <label className="block text-sm font-medium text-gray-700 mb-2">L/I (PO Line Items)</label>
+//                               <input
+//                                 type="text"
+//                                 value={liValue}
+//                                 onChange={(e) => handleTestLineChange(index, 'li', e.target.value)}
+//                                 className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"
+//                                 placeholder="1 & 3 & 4 or 1 to 5"
+//                               />
+//                             </div>
+//                             <div>
+//                               <label className="block text-sm font-medium text-gray-700 mb-2">Test Pressure</label>
+//                               <input
+//                                 type="text"
+//                                 value={pressureValue}
+//                                 onChange={(e) => handleTestLineChange(index, 'pressure', e.target.value)}
+//                                 className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"
+//                                 placeholder="4500 PSI"
+//                               />
+//                             </div>
+//                           </div>
+//                           <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded text-sm">
+//                             Preview: TEST: ABOVE FITTINGS (L/I: <strong>{liValue || ' '}</strong>) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT <strong>{pressureValue || ' '}</strong> WITHOUT ANY LEAKAGE.
+//                           </div>
+//                         </div>
+//                       );
+//                     })}
+//                   </div>
+//                 )}
 //               </section>
 
 //               {/* Items Section */}
@@ -473,7 +526,6 @@
 //                     <Plus size={20} /> Add New Item
 //                   </button>
 //                 </div>
-
 //                 {editForm.items.length === 0 ? (
 //                   <div className="text-center py-16 text-gray-500 border-2 border-dashed rounded-xl bg-gray-50">
 //                     No items added yet. Click "Add New Item" to start.
@@ -481,19 +533,13 @@
 //                 ) : (
 //                   <div className="space-y-10">
 //                     {editForm.items.map((item, idx) => (
-//                       <div
-//                         key={idx}
-//                         className="bg-gray-50 border border-gray-200 rounded-xl p-6 relative shadow-sm"
-//                       >
+//                       <div key={idx} className="bg-gray-50 border border-gray-200 rounded-xl p-6 relative shadow-sm">
 //                         <button
 //                           onClick={() => removeItemRow(idx)}
 //                           className="absolute top-4 right-4 text-red-600 hover:text-red-800 transition-colors"
-//                           title="Remove this item"
 //                         >
 //                           <Trash2 size={22} />
 //                         </button>
-
-//                         {/* General Item Fields */}
 //                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
 //                           {[
 //                             { label: 'PO Line Item No', field: 'po_lineitem_no' },
@@ -514,24 +560,17 @@
 //                             </div>
 //                           ))}
 //                         </div>
-
-//                         {/* Chemical Composition */}
 //                         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
 //                           <div className="bg-gray-100 px-5 py-3 font-medium text-gray-800 border-b">
 //                             Chemical Composition (%)
 //                           </div>
 //                           <div className="grid grid-cols-2 md:grid-cols-4 gap-0 divide-x divide-y divide-gray-200">
 //                             {[
-//                               { label: 'C', field: 'c' },
-//                               { label: 'Cr', field: 'cr' },
-//                               { label: 'Ni', field: 'ni' },
-//                               { label: 'Mo', field: 'mo' },
-//                               { label: 'Mn', field: 'mn' },
-//                               { label: 'Si', field: 'si' },
-//                               { label: 'S', field: 's' },
-//                               { label: 'P', field: 'p' },
-//                               { label: 'Cu', field: 'cu' },
-//                               { label: 'Fe', field: 'fe' },
+//                               { label: 'C', field: 'c' }, { label: 'Cr', field: 'cr' },
+//                               { label: 'Ni', field: 'ni' }, { label: 'Mo', field: 'mo' },
+//                               { label: 'Mn', field: 'mn' }, { label: 'Si', field: 'si' },
+//                               { label: 'S', field: 's' }, { label: 'P', field: 'p' },
+//                               { label: 'Cu', field: 'cu' }, { label: 'Fe', field: 'fe' },
 //                               { label: 'Co', field: 'co' },
 //                             ].map(({ label, field }) => (
 //                               <div key={field} className="flex flex-col p-4">
@@ -586,81 +625,87 @@
 //   };
 
 //   const displayValue = (value) => {
-//     if (value === undefined || value === null || value === '') return '---';
+//     if (value === undefined || value === null || value === '') return '—';
 //     return value;
 //   };
 
 //   const processedItems = React.useMemo(() => {
 //     if (!data?.items?.length) return [];
-
 //     const result = [];
 //     let currentPo = null;
 //     let counter = 0;
-
 //     data.items.forEach((item) => {
 //       const po = item.po_lineitem_no || '—';
-
 //       if (po === currentPo && po !== '—') {
 //         counter++;
-//         result.push({
-//           ...item,
-//           displayPo: `${po}.${counter}`
-//         });
+//         result.push({ ...item, displayPo: `${po}.${counter}` });
 //       } else {
 //         currentPo = po;
 //         counter = 0;
-//         result.push({
-//           ...item,
-//           displayPo: po
-//         });
+//         result.push({ ...item, displayPo: po });
 //       }
 //     });
-
 //     return result;
 //   }, [data?.items]);
 
 //   const styles = {
 //     reportContainer: {
-//       width: '1200px',
+//       width: '1050px',
 //       margin: '0 auto',
 //       backgroundColor: 'white',
 //       fontFamily: 'Arial, sans-serif',
-//       fontSize: '11px',
+//       fontSize: '10px',
 //       color: '#000',
 //     },
 //     page: {
-//       width: '1200px',
-//       minHeight: '780px',
-//       border: '2px solid #000',
+//       width: '100%',
 //       backgroundColor: 'white',
-//       marginBottom: '12px',
 //       boxSizing: 'border-box',
+//       pageBreakAfter: 'always',
 //     },
-//     table: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
+//     lastPage: {
+//       width: '100%',
+//       backgroundColor: 'white',
+//       boxSizing: 'border-box',
+//       pageBreakAfter: 'auto',
+//     },
+//     table: { 
+//       width: '100%', 
+//       borderCollapse: 'collapse', 
+//       tableLayout: 'fixed',
+//       border: '0.5px solid #999',
+//     },
 //     cell: {
-//       border: '1px solid #000',
-//       padding: '10px 4px',
+//       border: '0.5px solid #999',
+//       padding: '8px 2px 4px 2px',
 //       textAlign: 'center',
 //       verticalAlign: 'middle',
 //       wordWrap: 'break-word',
+//       fontSize: '9.5px',
+//       lineHeight: '1.3',
 //     },
-//     tracecell: {
-//       fontSize: '10px',
-//       border: '1px solid #000',
-//       padding: '4px 3px',
+//     chemicalCell: {
+//       border: '0.5px solid #999',
+//       padding: '8px 1px 4px 1px',
 //       textAlign: 'center',
-//       verticalAlign: 'middle',
-//       wordWrap: 'break-word',
+//       fontSize: '8.5px',
+//       width: '3.2%',
+//       lineHeight: '1.3',
 //     },
 //     bold: { fontWeight: 'bold' },
 //     textLeft: { textAlign: 'left', paddingLeft: '8px' },
 //     textRight: { textAlign: 'right', paddingRight: '8px' },
-//     arabic: { fontSize: '18px', fontWeight: 'bold', direction: 'rtl', margin: '0 5px' },
-//     companyTitle: { fontSize: '18px', fontWeight: 'bold' },
+//     arabic: { fontSize: '16px', fontWeight: 'bold', direction: 'rtl', margin: '0 5px' },
+//     companyTitle: { fontSize: '17px', fontWeight: 'bold' },
 //     address: { fontWeight: 'normal', fontSize: '9px', marginTop: '2px', display: 'block' },
-//     nestedTable: { border: 'none', width: '100%', height: '30px', borderCollapse: 'collapse' },
-//     nestedCell: { border: 'none', padding: '8px 9px', borderLeft: '1px solid #000', textAlign: 'left' },
-//     signatureImg: { width: '160px', display: 'block', margin: '12px auto 0 auto' },
+//     nestedTable: { border: 'none', width: '100%', borderCollapse: 'collapse' },
+//     nestedCell: { 
+//       border: 'none', 
+//       padding: '6px', 
+//       borderLeft: '0.5px solid #999',
+//       textAlign: 'left' 
+//     },
+//     signatureImg: { width: '180px', display: 'block', margin: '8px auto 0 auto' },
 //   };
 
 //   let signatureImage = null;
@@ -674,221 +719,270 @@
 //     } else if (typeof data.test_line_items === 'string') {
 //       try {
 //         const parsed = JSON.parse(data.test_line_items);
-//         if (Array.isArray(parsed)) testMessages = parsed;
-//         else testMessages = [data.test_line_items];
+//         testMessages = Array.isArray(parsed) ? parsed : [data.test_line_items];
 //       } catch {
 //         testMessages = [data.test_line_items];
 //       }
 //     }
 //   }
 
+//   // Header section component (reused for PDF pages)
 //   const HeaderSection = () => (
-//     <table style={styles.table}>
-//       <tbody>
-//         <tr>
-//           <td colSpan="11" style={{ ...styles.cell, ...styles.textLeft, borderBottom: 'none', borderRight: 'none', fontSize: '10px' }}>
-//             Format No. : ICCL/QC/R/14, Rev 01, Date: 01/04/2024
-//           </td>
-//           <td colSpan="6" style={{ ...styles.cell, ...styles.textRight, borderBottom: 'none', borderLeft: 'none', fontSize: '10px' }}>
-//             C.R. 2055012479
-//           </td>
-//           <td rowSpan="2" style={{ ...styles.cell, width: '110px' }}>
-//             <img src={logo} alt="ICCL" style={{ width: '90px', display: 'block', margin: '0 auto' }} crossOrigin="anonymous" />
-//           </td>
-//         </tr>
-
-//         <tr>
-//           <td colSpan="17" style={{ ...styles.cell, padding: '6px 15px' }}>
-//             <div style={{ textAlign: 'center' }}>
-//               <span style={styles.companyTitle}>Instrumentation & Controls Co. Ltd. (ICCL).</span>
-//               <span style={styles.arabic}>شركة الآلات الدقيقة والتحكم المحدودة</span>
-//               <div style={styles.address}>
-//                 Lot #56, Block #02, Section G, Support Industries, Jubail 2, P.O. Box No. 11300, Jubail – 31961 KSA  
-//                 Email:info@icclksa.com , Web:www.icclksa.com
-//               </div>
-//             </div>
-//           </td>
-//         </tr>
-
-//         <tr>
-//           <td colSpan="13" style={{ ...styles.cell, ...styles.bold, fontSize: '14px' }}>
-//             MATERIAL TESTING REPORT AND GUARANTEE CERTIFICATE
-//           </td>
-//           <td colSpan="5" style={{ padding: 0, border: '1px solid #000' }}>
-//             <table style={styles.nestedTable}>
-//               <tbody>
-//                 <tr>
-//                   <td style={{ ...styles.nestedCell, borderBottom: '1px solid #000', fontWeight: 'bold', borderLeft: 'none', textAlign: 'right', width: '191px'}}>
-//                     CERT.NO.:
-//                   </td>
-//                   <td style={{ ...styles.nestedCell, borderBottom: '1px solid #000', fontWeight: 'bold' }}>
-//                     {data.cert_no || '—'}
-//                   </td>
-//                 </tr>
-//                 <tr>
-//                   <td style={{ ...styles.nestedCell, fontWeight: 'bold', borderLeft: 'none', textAlign: 'right' }}>
-//                     DATE:
-//                   </td>
-//                   <td style={{ ...styles.nestedCell, fontWeight: 'bold' }}>
-//                     {getFormattedDate(data.cert_date)}
-//                   </td>
-//                 </tr>
-//               </tbody>
-//             </table>
-//           </td>
-//         </tr>
-
-//         <tr>
-//           <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textRight }}>CUSTOMER NAME</td>
-//           <td colSpan="10" style={{ ...styles.cell, ...styles.textLeft, ...styles.bold }}>
-//             {displayValue(data.customer_name)}
-//           </td>
-//           <td colSpan="3" style={{ ...styles.cell, ...styles.bold, textAlign: 'right' }}>Delivery Note No.:</td>
-//           <td colSpan="2" style={{ ...styles.cell, ...styles.bold, textAlign: 'left', fontSize: '13px', paddingLeft: '10px' }}>
-//             {displayValue(data.delivery_note_no)}
-//           </td>
-//         </tr>
-
-//         <tr>
-//           <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textRight }}>P.O.NO.</td>
-//           <td colSpan="5" style={{ ...styles.cell, ...styles.textLeft }}>{displayValue(data.po_no)}</td>
-//           <td colSpan="2" style={{ ...styles.cell, ...styles.bold }}>P.O.Date:</td>
-//           <td colSpan="3" style={styles.cell}>{displayValue(data.po_date)}</td>
-//           <td colSpan="3" style={{ ...styles.cell, ...styles.bold, textAlign: 'right' }}>Date:</td>
-//           <td colSpan="2" style={{ ...styles.cell, ...styles.textLeft }}>{displayValue(data.delivery_date)}</td>
-//         </tr>
-//       </tbody>
-//     </table>
-//   );
-
-//   const ItemsHeaderRow = () => (
 //     <>
-//       <tr style={styles.bold}>
-//         <td style={{ ...styles.cell, width: '38px' }}>PO<br />L/1</td>
-//         <td style={{ ...styles.cell, width: '153.5px' }}>ITEM & SIZE</td>
-//         <td style={{ ...styles.cell, width: '82px' }}>RAW<br />MTL. SIZE</td>
-//         <td style={{ ...styles.cell, width: '60px' }}>T.C.NO.</td>
-//         <td style={{ ...styles.tracecell, width: '81px' }}>Traceability<br />no-</td>
-//         <td colSpan="11" style={{ ...styles.cell}}>CHEMICAL COMPOSITION %</td>
-//         <td style={{ ...styles.cell, width: '48px' }}>QTY<br />PCS</td>
-//         <td style={{ ...styles.cell, width: '126px' }}>MATL.<br />Conf.To</td>
+//       <tr>
+//         <td colSpan="13" style={{ ...styles.cell, ...styles.textLeft, borderBottom: '0.5px solid #999', borderRight: 'none', fontSize: '9px' }}>
+//           Format No. : ICCL/QC/R/14, Rev 01, Date: 01/04/2024
+//         </td>
+//         <td colSpan="6" style={{ ...styles.cell, ...styles.textRight, borderBottom: '0.5px solid #999', borderLeft: 'none', fontSize: '9px' }}>
+//           C.R. 2055012479
+//         </td>
+//         <td rowSpan="2" style={{ ...styles.cell, width: '85px', padding: '4px' }}>
+//           <img src={logo} alt="ICCL" style={{ width: '70px', display: 'block', margin: '0 auto' }} crossOrigin="anonymous" />
+//         </td>
 //       </tr>
-
-//       <tr style={{ ...styles.bold, fontSize: '10px' }}>
-//         <td colSpan="5" style={{ ...styles.cell}}></td>
+//       <tr>
+//         <td colSpan="19" style={{ ...styles.cell, padding: '10px 8px' }}>
+//           <div style={{ textAlign: 'center' }}>
+//             <span style={styles.companyTitle}>Instrumentation & Controls Co. Ltd. (ICCL).</span>
+//             <span style={styles.arabic}>شركة الآلات الدقيقة والتحكم المحدودة</span>
+//             <div style={styles.address}>
+//               Lot #56, Block #02, Section G, Support Industries, Jubail 2, P.O. Box No. 11300, Jubail – 31961 KSA<br/>
+//               Email: info@icclksa.com , Web: www.icclksa.com
+//             </div>
+//           </div>
+//         </td>
+//       </tr>
+//       <tr>
+//         <td colSpan="15" style={{ ...styles.cell, ...styles.bold, fontSize: '13px', padding: '8px 2px' }}>
+//           MATERIAL TESTING REPORT AND GUARANTEE CERTIFICATE
+//         </td>
+//         <td colSpan="5" style={{ padding: 0, border: '0.5px solid #999' }}>
+//           <table style={styles.nestedTable}>
+//             <tbody>
+//               <tr>
+//                 <td style={{ ...styles.nestedCell, borderBottom: '0.5px solid #999', fontWeight: 'bold', width: '151.5px', ...styles.textRight }}>CERT.NO.:</td>
+//                 <td style={{ ...styles.nestedCell, borderBottom: '0.5px solid #999' }}>{data.cert_no || '—'}</td>
+//               </tr>
+//               <tr>
+//                 <td style={{ ...styles.nestedCell, fontWeight: 'bold', ...styles.textRight }}>DATE:</td>
+//                 <td style={{ ...styles.nestedCell }}>{getFormattedDate(data.cert_date)}</td>
+//               </tr>
+//             </tbody>
+//           </table>
+//         </td>
+//       </tr>
+//       <tr>
+//         <td colSpan="4" style={{ ...styles.cell, ...styles.bold, ...styles.textRight, padding: '8px 8px 4px 2px' }}>CUSTOMER NAME</td>
+//         <td colSpan="11" style={{ ...styles.cell, ...styles.textLeft, ...styles.bold, padding: '8px 2px 4px 8px' }}>{displayValue(data.customer_name)}</td>
+//         <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textRight, width: '171px', padding: '8px 8px 4px 2px' }}>Delivery Note No.:</td>
+//         <td colSpan="2" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(data.delivery_note_no)}</td>
+//       </tr>
+//       <tr>
+//         <td colSpan="4" style={{ ...styles.cell, ...styles.bold, ...styles.textRight, padding: '8px 8px 4px 2px' }}>P.O.NO.</td>
+//         <td colSpan="5" style={{ ...styles.cell, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(data.po_no)}</td>
+//         <td colSpan="2" style={{ ...styles.cell, ...styles.bold, padding: '8px 2px 4px 2px' }}>P.O.Date:</td>
+//         <td colSpan="4" style={{ ...styles.cell, padding: '8px 2px 4px 2px' }}>{displayValue(data.po_date)}</td>
+//         <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textRight, padding: '8px 8px 4px 2px' }}>Date:</td>
+//         <td colSpan="2" style={{ ...styles.cell, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(data.delivery_date)}</td>
+//       </tr>
+//       <tr style={styles.bold}>
+//         <td rowSpan="2" style={{ ...styles.cell, width: '3.5%', padding: '8px 2px 4px 2px' }}>PO<br />L/1</td>
+//         <td colSpan="3" rowSpan="2" style={{ ...styles.cell, width: '16%', padding: '8px 2px 4px 2px' }}>ITEM & SIZE</td>
+//         <td rowSpan="2" style={{ ...styles.cell, width: '7%', padding: '8px 2px 4px 2px' }}>RAW<br />MTL. SIZE</td>
+//         <td rowSpan="2" style={{ ...styles.cell, width: '6%', padding: '8px 2px 4px 2px' }}>T.C.NO.</td>
+//         <td rowSpan="2" style={{ ...styles.cell, width: '7%', padding: '8px 2px 4px 2px' }}>Traceability<br />no-</td>
+//         <td colSpan="11" style={{ ...styles.cell, padding: '8px 2px 4px 2px' }}>CHEMICAL COMPOSITION %</td>
+//         <td rowSpan="2" style={{ ...styles.cell, width: '4%', padding: '8px 2px 4px 2px' }}>QTY<br />PCS</td>
+//         <td rowSpan="2" style={{ ...styles.cell, width: '10%', padding: '8px 2px 4px 2px' }}>MATL.<br />Conf.To</td>
+//       </tr>
+//       <tr style={{ ...styles.bold }}>
 //         {['C','Cr','Ni','Mo','Mn','Si','S','P','Cu','Fe','Co'].map(c => (
-//           <td key={c} style={{ ...styles.cell, width: '55px' }}>{c}</td>
+//           <td key={c} style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{c}</td>
 //         ))}
-//         <td colSpan="2" style={styles.cell}></td>
 //       </tr>
 //     </>
 //   );
 
+//   // Footer section component (appears only on last page of PDF)
 //   const FooterSection = () => (
-//     <table style={styles.table}>
-//       <tbody>
+//     <>
+//       {testMessages.length > 0 && (
 //         <tr>
-//           <td colSpan="11" style={{ ...styles.cell, textAlign: 'left', padding: '12px 10px', fontSize: '11px' }}>
-//             <span style={styles.bold}>
-//               WE GUARANTEE ABOVE MATERIAL AGAINST ANY MANUFACTURING DEFECT FOR 12 MONTHS <br />
-//               FROM DATE OF SUPPLY OR 6 MONTHS FROM DATE OF INSTALLATION WHICHEVER IS EARLIER
-//             </span>
-//           </td>
-//           <td colSpan="7" style={{ ...styles.cell, height: '158px', verticalAlign: 'top', padding: '12px', textAlign: 'center' }}>
-//             <div style={styles.bold}>FOR Instrumentation & Controls Co. Ltd</div>
-//             {signatureImage && (
-//               <img
-//                 src={signatureImage}
-//                 alt="Signature"
-//                 style={styles.signatureImg}
-//                 crossOrigin="anonymous"
-//               />
-//             )}
+//           <td colSpan="20" style={{ ...styles.cell, textAlign: 'left', padding: '12px 8px', lineHeight: '1.5' }}>
+//             {testMessages.map((msg, i) => (
+//               <div key={i} style={{ marginBottom: '6px' }}>{msg}</div>
+//             ))}
 //           </td>
 //         </tr>
+//       )}
+//       <tr>
+//         <td colSpan="12" style={{ ...styles.cell, textAlign: 'left', padding: '12px 8px', lineHeight: '1.4' }}>
+//           <span style={{ ...styles.bold, fontSize: '9px' }}>
+//             WE GUARANTEE ABOVE MATERIAL AGAINST ANY MANUFACTURING DEFECT FOR 12 MONTHS <br />
+//             FROM DATE OF SUPPLY OR 6 MONTHS FROM DATE OF INSTALLATION WHICHEVER IS EARLIER
+//           </span>
+//         </td>
+//         <td colSpan="8" style={{ ...styles.cell, height: '140px', verticalAlign: 'top', padding: '12px 8px' }}>
+//           <div style={styles.bold}>FOR Instrumentation & Controls Co. Ltd</div>
+//           {signatureImage && (
+//             <img src={signatureImage} alt="Signature" style={styles.signatureImg} crossOrigin="anonymous" />
+//           )}
+//         </td>
+//       </tr>
+//     </>
+//   );
+
+//   // UI Version - Single header, continuous display (for screen viewing)
+//   const UIVersion = () => (
+//     <table style={styles.table}>
+//       <tbody>
+//         <HeaderSection />
+//         {processedItems.map((item, idx) => (
+//           <tr key={idx}>
+//             <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{item.displayPo}</td>
+//             <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(item.item_size)}</td>
+//             <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.raw_material_size)}</td>
+//             <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.tc_no)}</td>
+//             <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.traceability_no)}</td>
+//             <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.c)}</td>
+//             <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.cr)}</td>
+//             <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.ni)}</td>
+//             <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.mo)}</td>
+//             <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.mn)}</td>
+//             <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.si)}</td>
+//             <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.s)}</td>
+//             <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.p)}</td>
+//             <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.cu)}</td>
+//             <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.fe)}</td>
+//             <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.co)}</td>
+//             <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.qty_pcs)}</td>
+//             <td style={{ ...styles.cell, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(item.material_grade)}</td>
+//           </tr>
+//         ))}
+//         <FooterSection />
 //       </tbody>
 //     </table>
 //   );
 
+//   // PDF Version - Multiple pages with header on each page
+//   const PDFVersion = () => {
+//     // Calculate rows per page for PDF (adjust based on your needs)
+//     const ROWS_PER_PAGE = 12;
+    
+//     // Split items into pages
+//     const pages = [];
+//     for (let i = 0; i < processedItems.length; i += ROWS_PER_PAGE) {
+//       pages.push(processedItems.slice(i, i + ROWS_PER_PAGE));
+//     }
+
+//     // If no items, still show one page with header and footer
+//     if (pages.length === 0) {
+//       pages.push([]);
+//     }
+
+//     return (
+//       <>
+//         {pages.map((pageItems, pageIndex) => {
+//           const isLastPage = pageIndex === pages.length - 1;
+          
+//           return (
+//             <div 
+//               key={pageIndex} 
+//               style={isLastPage ? styles.lastPage : styles.page}
+//               className="pdf-page"
+//             >
+//               <table style={styles.table}>
+//                 <tbody>
+//                   {/* Header on EVERY page */}
+//                   <HeaderSection />
+                  
+//                   {/* Items for this page */}
+//                   {pageItems.length > 0 ? (
+//                     pageItems.map((item, idx) => (
+//                       <tr key={`${pageIndex}-${idx}`}>
+//                         <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{item.displayPo}</td>
+//                         <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(item.item_size)}</td>
+//                         <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.raw_material_size)}</td>
+//                         <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.tc_no)}</td>
+//                         <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.traceability_no)}</td>
+//                         <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.c)}</td>
+//                         <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.cr)}</td>
+//                         <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.ni)}</td>
+//                         <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.mo)}</td>
+//                         <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.mn)}</td>
+//                         <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.si)}</td>
+//                         <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.s)}</td>
+//                         <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.p)}</td>
+//                         <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.cu)}</td>
+//                         <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.fe)}</td>
+//                         <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.co)}</td>
+//                         <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.qty_pcs)}</td>
+//                         <td style={{ ...styles.cell, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(item.material_grade)}</td>
+//                       </tr>
+//                     ))
+//                   ) : (
+//                     <tr>
+//                       <td colSpan="20" style={styles.cell}>No items to display</td>
+//                     </tr>
+//                   )}
+                  
+//                   {/* Footer - only on last page */}
+//                   {isLastPage && <FooterSection />}
+//                 </tbody>
+//               </table>
+//             </div>
+//           );
+//         })}
+//       </>
+//     );
+//   };
+
+//   // Determine if this is for PDF or UI based on ref presence
+//   // The ref is passed from the parent component when used for PDF generation
+//   const isPDF = ref !== null && ref.current !== undefined;
+
 //   return (
-//     <div style={{ overflowX: 'auto', padding: '12px 0' }} ref={ref}>
+//     <div style={{ overflowX: 'auto', padding: '10px' }} ref={ref}>
 //       <div style={styles.reportContainer}>
-//         <div style={styles.page}>
-//           <HeaderSection />
-
-//           <table style={styles.table}>
-//             <tbody>
-//               <ItemsHeaderRow />
-
-//               {processedItems.map((item, idx) => (
-//                 <tr
-//                   key={idx}
-//                   className="item-row"
-//                   style={{
-//                     pageBreakInside: 'avoid',
-//                     breakInside: 'avoid',
-//                   }}
-//                 >
-//                   <td style={styles.cell}>{item.displayPo}</td>
-//                   <td style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>
-//                     {displayValue(item.item_size)}
-//                   </td>
-//                   <td style={styles.cell}>{displayValue(item.raw_material_size)}</td>
-//                   <td style={styles.cell}>{displayValue(item.tc_no)}</td>
-//                   <td style={styles.tracecell}>{displayValue(item.traceability_no)}</td>
-//                   <td style={styles.cell}>{formatChemicalValue(item.c)}</td>
-//                   <td style={styles.cell}>{formatChemicalValue(item.cr)}</td>
-//                   <td style={styles.cell}>{formatChemicalValue(item.ni)}</td>
-//                   <td style={styles.cell}>{formatChemicalValue(item.mo)}</td>
-//                   <td style={styles.cell}>{formatChemicalValue(item.mn)}</td>
-//                   <td style={styles.cell}>{formatChemicalValue(item.si)}</td>
-//                   <td style={styles.cell}>{formatChemicalValue(item.s)}</td>
-//                   <td style={styles.cell}>{formatChemicalValue(item.p)}</td>
-//                   <td style={styles.cell}>{formatChemicalValue(item.cu)}</td>
-//                   <td style={styles.cell}>{formatChemicalValue(item.fe)}</td>
-//                   <td style={styles.cell}>{formatChemicalValue(item.co)}</td>
-//                   <td style={styles.cell}>{displayValue(item.qty_pcs)}</td>
-//                   <td style={{ ...styles.cell, ...styles.textLeft }}>
-//                     {displayValue(item.material_grade)}
-//                   </td>
-//                 </tr>
-//               ))}
-
-//               {testMessages.length > 0 && (
-//                 <tr>
-//                   <td
-//                     colSpan="18"
-//                     style={{
-//                       ...styles.cell,
-//                       textAlign: 'left',
-//                       padding: '20px 16px',
-//                       whiteSpace: 'pre-line',
-//                       lineHeight: '1.55',
-//                       pageBreakInside: 'avoid',
-//                       breakInside: 'avoid',
-//                     }}
-//                   >
-//                     {testMessages.map((msg, i) => (
-//                       <div key={i} style={{ marginBottom: i < testMessages.length - 1 ? '28px' : '0' }}>
-//                         {msg}
-//                       </div>
-//                     ))}
-//                   </td>
-//                 </tr>
-//               )}
-//             </tbody>
-//           </table>
-
-//           <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginTop: 'auto' }}>
-//             <FooterSection />
-//           </div>
-//         </div>
+//         {isPDF ? <PDFVersion /> : <UIVersion />}
 //       </div>
 //     </div>
 //   );
 // });
 
+
+
+
 // export default ViewSheets;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -954,7 +1048,6 @@ const ViewSheets = () => {
   const [filterText, setFilterText] = useState('');
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingCertificate, setEditingCertificate] = useState(null);
-
   const [editForm, setEditForm] = useState({
     cert_no: '',
     cert_date: '',
@@ -965,8 +1058,8 @@ const ViewSheets = () => {
     po_date: '',
     signature: 0,
     items: [],
+    test_line_items: [],
   });
-
   const certificateRef = useRef(null);
 
   useEffect(() => {
@@ -1020,58 +1113,35 @@ const ViewSheets = () => {
     }
   };
 
+  // ==================== PDF DOWNLOAD ====================
   const handleDownloadPDF = (certNo) => {
     const element = certificateRef.current;
     if (!element) {
-      console.error("Certificate element not found");
-      alert("Cannot generate PDF — content not rendered");
+      alert("Certificate element not found");
       return;
     }
-
     const opt = {
-      margin:       [8, 6, 8, 6],
-      filename:     `Certificate_${(certNo || "unknown").replace(/\//g, "-")}.pdf`,
-      image:        { type: 'jpeg', quality: 0.94 },
-      html2canvas:  {
-        scale:          2.0,
-        useCORS:        true,
-        logging:        false,
-        scrollX:        0,
-        scrollY:        0,
-        windowWidth:    1250,
-        windowHeight:   900,
-        letterRendering: true,
-        allowTaint:     false,
-        onclone: (clonedDoc) => {
-          const style = clonedDoc.createElement('style');
-          style.innerHTML = `
-            @page { size: A4 landscape; margin: 6mm 8mm; }
-            body { font-size: 11px !important; }
-          `;
-          clonedDoc.head.appendChild(style);
-
-          const images = clonedDoc.querySelectorAll('img');
-          return Promise.all(
-            Array.from(images).map(img => 
-              img.complete ? Promise.resolve() : 
-              new Promise(r => { img.onload = r; img.onerror = r; })
-            )
-          );
-        }
+      margin: [8, 8, 8, 8],
+      filename: `Certificate_${(certNo || "unknown").replace(/\//g, "-")}.pdf`,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: {
+        scale: 2.0,
+        useCORS: true,
+        logging: false,
+        letterRendering: true
       },
       jsPDF: {
-        unit:       'mm',
-        format:     'a4',
+        unit: 'mm',
+        format: 'a4',
         orientation: 'landscape'
       },
-      pagebreak: { 
-        mode:      ['avoid-all', 'css', 'legacy'],
-        before:    '.page-break-before',
-        after:     '.page-break-after',
-        avoid:     ['tr', '.signature-section', '.keep-together']
+      pagebreak: {
+        mode: ['avoid-all', 'css', 'legacy'],
+        before: '.page-break-before',
+        after: '.page-break-after',
+        avoid: ['tr', '.keep-together']
       }
     };
-
     html2pdf()
       .set(opt)
       .from(element)
@@ -1091,8 +1161,6 @@ const ViewSheets = () => {
         setSheets(prev => prev.filter(s => s.id !== id));
         if (expandedId === id) setExpandedId(null);
         alert('Deleted successfully');
-      } else {
-        alert('Delete failed: ' + (result.error || 'Unknown error'));
       }
     } catch (err) {
       alert('Network error during delete');
@@ -1103,11 +1171,9 @@ const ViewSheets = () => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return '';
-
-    const day   = date.getDate().toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
     const month = date.toLocaleString('en-US', { month: 'short' });
-    const year  = date.getFullYear().toString().slice(-2);
-
+    const year = date.getFullYear().toString().slice(-2);
     return `${day}-${month}-${year}`;
   };
 
@@ -1118,16 +1184,11 @@ const ViewSheets = () => {
         const res = await fetch(`http://localhost:5000/api/sheet/get-certificate/${id}`);
         const json = await res.json();
         if (json.success) data = json.data;
-        else {
-          alert('Could not load data');
-          return;
-        }
+        else return alert('Could not load data');
       } catch (err) {
-        alert('Failed to load certificate for editing');
-        return;
+        return alert('Failed to load certificate for editing');
       }
     }
-
     setEditingCertificate(data);
     setEditForm({
       cert_no: data.cert_no || '',
@@ -1139,6 +1200,9 @@ const ViewSheets = () => {
       po_date: formatDateForEdit(data.po_date),
       signature: data.signature ?? 0,
       items: data.items ? data.items.map(item => ({ ...item })) : [],
+      test_line_items: Array.isArray(data.test_line_items)
+        ? [...data.test_line_items]
+        : (typeof data.test_line_items === 'string' ? [data.test_line_items] : []),
     });
     setEditModalOpen(true);
   };
@@ -1156,19 +1220,48 @@ const ViewSheets = () => {
     });
   };
 
+  const handleTestLineChange = (index, field, value) => {
+    setEditForm(prev => {
+      const newLines = [...prev.test_line_items];
+      const currentMsg = newLines[index] || '';
+      const liMatch = currentMsg.match(/\(L\/I:\s*([^)]*)\)/);
+      const pressureMatch = currentMsg.match(/AT\s+([^ ]+)\s+WITHOUT/);
+      let liPart = liMatch ? liMatch[1].trim() : '';
+      let pressurePart = pressureMatch ? pressureMatch[1].trim() : '';
+      if (field === 'li') liPart = value;
+      if (field === 'pressure') pressurePart = value;
+      newLines[index] = `TEST: ABOVE FITTINGS (L/I: ${liPart}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${pressurePart} WITHOUT ANY LEAKAGE.`;
+      return { ...prev, test_line_items: newLines };
+    });
+  };
+
+  const addNewTestLine = () => {
+    setEditForm(prev => ({
+      ...prev,
+      test_line_items: [
+        ...prev.test_line_items,
+        "TEST: ABOVE FITTINGS (L/I: ) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT PSI WITHOUT ANY LEAKAGE."
+      ]
+    }));
+  };
+
+  const removeTestLine = (index) => {
+    if (window.confirm("Remove this test message?")) {
+      setEditForm(prev => ({
+        ...prev,
+        test_line_items: prev.test_line_items.filter((_, i) => i !== index)
+      }));
+    }
+  };
+
   const addNewItemRow = () => {
     setEditForm(prev => ({
       ...prev,
       items: [
         ...prev.items,
         {
-          po_lineitem_no: '',
-          item_size: '',
-          raw_material_size: '',
-          tc_no: '',
-          traceability_no: '',
-          qty_pcs: '',
-          material_grade: '',
+          po_lineitem_no: '', item_size: '', raw_material_size: '', tc_no: '',
+          traceability_no: '', qty_pcs: '', material_grade: '',
           c: '', cr: '', ni: '', mo: '', mn: '', si: '', s: '', p: '', cu: '', fe: '', co: ''
         }
       ]
@@ -1186,7 +1279,6 @@ const ViewSheets = () => {
 
   const saveUpdatedCertificate = async () => {
     if (!editingCertificate?.id) return;
-
     try {
       const res = await fetch(`http://localhost:5000/api/sheet/update-certificate/${editingCertificate.id}`, {
         method: 'PUT',
@@ -1218,12 +1310,9 @@ const ViewSheets = () => {
 
   const formatChemicalValue = (value) => {
     if (value === undefined || value === null || value === '') return '---';
-    
     const numValue = parseFloat(value);
     if (isNaN(numValue)) return '---';
-    
     if (numValue === 0 || Math.abs(numValue) < 0.0001) return '-';
-    
     const formatted = numValue.toFixed(3);
     return formatted.replace(/\.?0+$/, '');
   };
@@ -1261,10 +1350,7 @@ const ViewSheets = () => {
                   className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
                 {filterText && (
-                  <button
-                    onClick={clearFilter}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-                  >
+                  <button onClick={clearFilter} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
                     <X size={18} />
                   </button>
                 )}
@@ -1296,42 +1382,35 @@ const ViewSheets = () => {
                   </div>
                 </div>
 
-                {expandedId === sheet.id && (
+                {expandedId === sheet.id && sheetDetails[sheet.id] && (
                   <div className="p-6 border-t bg-gray-50">
-                    {!sheetDetails[sheet.id] ? (
-                      <div className="flex justify-center py-12">
-                        <Loader2 className="animate-spin text-indigo-600" size={36} />
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex flex-wrap justify-end gap-4 mb-6">
-                          <button
-                            onClick={() => openEditModal(sheet.id)}
-                            className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700"
-                          >
-                            <Edit size={18} /> Edit
-                          </button>
-                          <button
-                            onClick={() => handleDownloadPDF(sheet.cert_no)}
-                            className="flex items-center gap-2 bg-gray-800 text-white px-5 py-2.5 rounded-lg hover:bg-gray-900"
-                          >
-                            <Download size={18} /> PDF
-                          </button>
-                          <button
-                            onClick={() => handleDelete(sheet.id, sheet.cert_no)}
-                            className="flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 rounded-lg hover:bg-red-700"
-                          >
-                            <Trash2 size={18} /> Delete
-                          </button>
-                        </div>
+                    <div className="flex flex-wrap justify-end gap-4 mb-6">
+                      <button
+                        onClick={() => openEditModal(sheet.id)}
+                        className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700"
+                      >
+                        <Edit size={18} /> Edit
+                      </button>
+                      <button
+                        onClick={() => handleDownloadPDF(sheet.cert_no)}
+                        className="flex items-center gap-2 bg-gray-800 text-white px-5 py-2.5 rounded-lg hover:bg-gray-900"
+                      >
+                        <Download size={18} /> PDF
+                      </button>
+                      <button
+                        onClick={() => handleDelete(sheet.id, sheet.cert_no)}
+                        className="flex items-center gap-2 bg-red-600 text-white px-5 py-2.5 rounded-lg hover:bg-red-700"
+                      >
+                        <Trash2 size={18} /> Delete
+                      </button>
+                    </div>
 
-                        <CertificateLayout
-                          data={sheetDetails[sheet.id]}
-                          ref={certificateRef}
-                          formatChemicalValue={formatChemicalValue}
-                        />
-                      </>
-                    )}
+                    <div ref={certificateRef}>
+                      <CertificateLayout
+                        data={sheetDetails[sheet.id]}
+                        formatChemicalValue={formatChemicalValue}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -1340,10 +1419,9 @@ const ViewSheets = () => {
         </div>
       </div>
 
-      {/* ─── FULL SCREEN EDIT MODAL ─────────────────────────────────────────────── */}
+      {/* ====================== EDIT MODAL ====================== */}
       {editModalOpen && (
         <div className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden">
-          {/* Top Bar */}
           <div className="border-b px-6 py-4 flex items-center justify-between bg-white sticky top-0 z-10 shadow-sm">
             <button
               onClick={() => setEditModalOpen(false)}
@@ -1356,97 +1434,115 @@ const ViewSheets = () => {
             </h2>
             <div className="w-10"></div>
           </div>
-
-          {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto p-6 md:p-10">
             <div className="max-w-6xl mx-auto space-y-14 pb-20">
-
               {/* Header Fields */}
               <section>
                 <h3 className="text-2xl font-bold mb-6 text-gray-900">Certificate Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[
-                    { label: 'Certificate No', name: 'cert_no', type: 'text' },
-                    { label: 'Certificate Date', name: 'cert_date', type: 'text', placeholder: '06-Jul-25' },
-                    { label: 'Customer Name', name: 'customer_name', type: 'text' },
-                    { label: 'P.O. Number', name: 'po_no', type: 'text' },
-                    { label: 'P.O. Date', name: 'po_date', type: 'text', placeholder: '06-Jul-25' },
-                    { label: 'Delivery Note No', name: 'delivery_note_no', type: 'text' },
-                    { label: 'Delivery Date', name: 'delivery_date', type: 'text', placeholder: '06-Jul-25' },
+                    { label: 'Certificate No', name: 'cert_no' },
+                    { label: 'Certificate Date', name: 'cert_date', placeholder: '06-Jul-25' },
+                    { label: 'Customer Name', name: 'customer_name' },
+                    { label: 'P.O. Number', name: 'po_no' },
+                    { label: 'P.O. Date', name: 'po_date', placeholder: '06-Jul-25' },
+                    { label: 'Delivery Note No', name: 'delivery_note_no' },
+                    { label: 'Delivery Date', name: 'delivery_date', placeholder: '06-Jul-25' },
                   ].map(field => (
                     <div key={field.name} className="flex flex-col">
                       <label className="text-sm font-medium text-gray-700 mb-2">{field.label}</label>
                       <input
-                        type={field.type || 'text'}
+                        type="text"
                         name={field.name}
                         value={editForm[field.name] || ''}
                         onChange={handleEditHeaderChange}
                         placeholder={field.placeholder || ''}
-                        pattern={field.type === 'text' && field.placeholder ? "\\d{2}-[A-Za-z]{3}-\\d{2}" : undefined}
-                        title={field.placeholder ? "Format: dd-MMM-yy (e.g. 06-Jul-25)" : undefined}
-                        className="border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                        className="border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"
                       />
                     </div>
                   ))}
                 </div>
               </section>
 
-              {/* Signature Selection - NEW */}
+              {/* Signature Selection */}
               <section>
                 <h3 className="text-2xl font-bold mb-6 text-gray-900">Signature</h3>
                 <div className="flex flex-wrap gap-8">
                   <label className="flex flex-col items-center cursor-pointer">
-                    <input
-                      type="radio"
-                      name="signature"
-                      value={0}
-                      checked={editForm.signature === 0}
-                      onChange={() => setEditForm(prev => ({ ...prev, signature: 0 }))}
-                      className="mb-2"
-                    />
-                    <div className="text-center">
-                      <div className="text-gray-700 font-medium">None</div>
-                    </div>
+                    <input type="radio" name="signature" value={0} checked={editForm.signature === 0} onChange={() => setEditForm(prev => ({ ...prev, signature: 0 }))} className="mb-2" />
+                    <div className="text-gray-700 font-medium">None</div>
                   </label>
-
                   <label className="flex flex-col items-center cursor-pointer">
-                    <input
-                      type="radio"
-                      name="signature"
-                      value={1}
-                      checked={editForm.signature === 1}
-                      onChange={() => setEditForm(prev => ({ ...prev, signature: 1 }))}
-                      className="mb-2"
-                    />
-                    <div className="text-center">
-                      <img
-                        src={sign1}
-                        alt="Signature 1"
-                        className="w-32 h-auto border border-gray-300 rounded shadow-sm"
-                      />
-                      <div className="mt-2 text-gray-700 font-medium">Sign 1</div>
-                    </div>
+                    <input type="radio" name="signature" value={1} checked={editForm.signature === 1} onChange={() => setEditForm(prev => ({ ...prev, signature: 1 }))} className="mb-2" />
+                    <img src={sign1} alt="Signature 1" className="w-32 h-auto border border-gray-300 rounded shadow-sm" />
+                    <div className="mt-2 text-gray-700 font-medium">Sign 1</div>
                   </label>
-
                   <label className="flex flex-col items-center cursor-pointer">
-                    <input
-                      type="radio"
-                      name="signature"
-                      value={2}
-                      checked={editForm.signature === 2}
-                      onChange={() => setEditForm(prev => ({ ...prev, signature: 2 }))}
-                      className="mb-2"
-                    />
-                    <div className="text-center">
-                      <img
-                        src={sign2}
-                        alt="Signature 2"
-                        className="w-32 h-auto border border-gray-300 rounded shadow-sm"
-                      />
-                      <div className="mt-2 text-gray-700 font-medium">Sign 2</div>
-                    </div>
+                    <input type="radio" name="signature" value={2} checked={editForm.signature === 2} onChange={() => setEditForm(prev => ({ ...prev, signature: 2 }))} className="mb-2" />
+                    <img src={sign2} alt="Signature 2" className="w-32 h-auto border border-gray-300 rounded shadow-sm" />
+                    <div className="mt-2 text-gray-700 font-medium">Sign 2</div>
                   </label>
                 </div>
+              </section>
+
+              {/* Hydro Test Messages */}
+              <section>
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">Hydro Test Messages</h3>
+                  <button
+                    onClick={addNewTestLine}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-sm transition-colors"
+                  >
+                    <Plus size={20} /> Add New Line
+                  </button>
+                </div>
+                {editForm.test_line_items.length === 0 ? (
+                  <p className="text-gray-500 italic">No test messages yet. Click "Add New Line" to create one.</p>
+                ) : (
+                  <div className="space-y-8">
+                    {editForm.test_line_items.map((msg, index) => {
+                      const liMatch = msg.match(/\(L\/I:\s*([^)]*)\)/);
+                      const pressureMatch = msg.match(/AT\s+([^ ]+)\s+WITHOUT/);
+                      const liValue = liMatch ? liMatch[1].trim() : '';
+                      const pressureValue = pressureMatch ? pressureMatch[1].trim() : '';
+                      return (
+                        <div key={index} className="border border-gray-300 rounded-xl p-6 bg-white relative">
+                          <button
+                            onClick={() => removeTestLine(index)}
+                            className="absolute top-4 right-4 text-red-600 hover:text-red-800 transition-colors"
+                          >
+                            <Trash2 size={22} />
+                          </button>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">L/I (PO Line Items)</label>
+                              <input
+                                type="text"
+                                value={liValue}
+                                onChange={(e) => handleTestLineChange(index, 'li', e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"
+                                placeholder="1 & 3 & 4 or 1 to 5"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Test Pressure</label>
+                              <input
+                                type="text"
+                                value={pressureValue}
+                                onChange={(e) => handleTestLineChange(index, 'pressure', e.target.value)}
+                                className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"
+                                placeholder="4500 PSI"
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded text-sm">
+                            Preview: TEST: ABOVE FITTINGS (L/I: <strong>{liValue || ' '}</strong>) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT <strong>{pressureValue || ' '}</strong> WITHOUT ANY LEAKAGE.
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
 
               {/* Items Section */}
@@ -1460,7 +1556,6 @@ const ViewSheets = () => {
                     <Plus size={20} /> Add New Item
                   </button>
                 </div>
-
                 {editForm.items.length === 0 ? (
                   <div className="text-center py-16 text-gray-500 border-2 border-dashed rounded-xl bg-gray-50">
                     No items added yet. Click "Add New Item" to start.
@@ -1468,18 +1563,13 @@ const ViewSheets = () => {
                 ) : (
                   <div className="space-y-10">
                     {editForm.items.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-gray-50 border border-gray-200 rounded-xl p-6 relative shadow-sm"
-                      >
+                      <div key={idx} className="bg-gray-50 border border-gray-200 rounded-xl p-6 relative shadow-sm">
                         <button
                           onClick={() => removeItemRow(idx)}
                           className="absolute top-4 right-4 text-red-600 hover:text-red-800 transition-colors"
-                          title="Remove this item"
                         >
                           <Trash2 size={22} />
                         </button>
-
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                           {[
                             { label: 'PO Line Item No', field: 'po_lineitem_no' },
@@ -1500,23 +1590,17 @@ const ViewSheets = () => {
                             </div>
                           ))}
                         </div>
-
                         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                           <div className="bg-gray-100 px-5 py-3 font-medium text-gray-800 border-b">
                             Chemical Composition (%)
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-0 divide-x divide-y divide-gray-200">
                             {[
-                              { label: 'C', field: 'c' },
-                              { label: 'Cr', field: 'cr' },
-                              { label: 'Ni', field: 'ni' },
-                              { label: 'Mo', field: 'mo' },
-                              { label: 'Mn', field: 'mn' },
-                              { label: 'Si', field: 'si' },
-                              { label: 'S', field: 's' },
-                              { label: 'P', field: 'p' },
-                              { label: 'Cu', field: 'cu' },
-                              { label: 'Fe', field: 'fe' },
+                              { label: 'C', field: 'c' }, { label: 'Cr', field: 'cr' },
+                              { label: 'Ni', field: 'ni' }, { label: 'Mo', field: 'mo' },
+                              { label: 'Mn', field: 'mn' }, { label: 'Si', field: 'si' },
+                              { label: 'S', field: 's' }, { label: 'P', field: 'p' },
+                              { label: 'Cu', field: 'cu' }, { label: 'Fe', field: 'fe' },
                               { label: 'Co', field: 'co' },
                             ].map(({ label, field }) => (
                               <div key={field} className="flex flex-col p-4">
@@ -1571,81 +1655,88 @@ const CertificateLayout = React.forwardRef(({ data, formatChemicalValue }, ref) 
   };
 
   const displayValue = (value) => {
-    if (value === undefined || value === null || value === '') return '---';
+    if (value === undefined || value === null || value === '') return '—';
     return value;
   };
 
   const processedItems = React.useMemo(() => {
     if (!data?.items?.length) return [];
-
     const result = [];
     let currentPo = null;
     let counter = 0;
-
     data.items.forEach((item) => {
       const po = item.po_lineitem_no || '—';
-
       if (po === currentPo && po !== '—') {
         counter++;
-        result.push({
-          ...item,
-          displayPo: `${po}.${counter}`
-        });
+        result.push({ ...item, displayPo: `${po}.${counter}` });
       } else {
         currentPo = po;
         counter = 0;
-        result.push({
-          ...item,
-          displayPo: po
-        });
+        result.push({ ...item, displayPo: po });
       }
     });
-
     return result;
   }, [data?.items]);
 
   const styles = {
     reportContainer: {
-      width: '1200px',
+      width: '1050px',
       margin: '0 auto',
       backgroundColor: 'white',
       fontFamily: 'Arial, sans-serif',
-      fontSize: '11px',
+      fontSize: '10px',
       color: '#000',
     },
     page: {
-      width: '1200px',
-      minHeight: '780px',
-      border: '2px solid #000',
+      width: '100%',
       backgroundColor: 'white',
-      marginBottom: '12px',
       boxSizing: 'border-box',
+      pageBreakAfter: 'always',
+      pageBreakInside: 'avoid',
     },
-    table: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
+    lastPage: {
+      width: '100%',
+      backgroundColor: 'white',
+      boxSizing: 'border-box',
+      pageBreakAfter: 'auto',
+    },
+    table: { 
+      width: '100%', 
+      borderCollapse: 'collapse', 
+      tableLayout: 'fixed',
+      border: '0.5px solid #999',
+    },
     cell: {
-      border: '1px solid #000',
-      padding: '10px 4px',
+      border: '0.5px solid #999',
+      padding: '8px 2px 4px 2px',
       textAlign: 'center',
       verticalAlign: 'middle',
       wordWrap: 'break-word',
+      fontSize: '9.5px',
+      lineHeight: '1.3',
     },
-    tracecell: {
-      fontSize: '10px',
-      border: '1px solid #000',
-      padding: '4px 3px',
+    chemicalCell: {
+      border: '0.5px solid #999',
+      padding: '8px 1px 4px 1px',
       textAlign: 'center',
-      verticalAlign: 'middle',
-      wordWrap: 'break-word',
+      fontSize: '8.5px',
+      width: '3.2%',
+      lineHeight: '1.3',
     },
     bold: { fontWeight: 'bold' },
     textLeft: { textAlign: 'left', paddingLeft: '8px' },
     textRight: { textAlign: 'right', paddingRight: '8px' },
-    arabic: { fontSize: '18px', fontWeight: 'bold', direction: 'rtl', margin: '0 5px' },
-    companyTitle: { fontSize: '18px', fontWeight: 'bold' },
+    arabic: { fontSize: '16px', fontWeight: 'bold', direction: 'rtl', margin: '0 5px' },
+    companyTitle: { fontSize: '17px', fontWeight: 'bold' },
     address: { fontWeight: 'normal', fontSize: '9px', marginTop: '2px', display: 'block' },
-    nestedTable: { border: 'none', width: '100%', height: '30px', borderCollapse: 'collapse' },
-    nestedCell: { border: 'none', padding: '8px 9px', borderLeft: '1px solid #000', textAlign: 'left' },
-    signatureImg: { width: '160px', display: 'block', margin: '12px auto 0 auto' },
+    nestedTable: { border: 'none', width: '100%', borderCollapse: 'collapse' },
+    nestedCell: { 
+      border: 'none', 
+      padding: '6px', 
+      borderLeft: '0.5px solid #999',
+      textAlign: 'left' 
+    },
+    signatureImg: { width: '180px', display: 'block', margin: '8px auto 0 auto' },
   };
 
   let signatureImage = null;
@@ -1659,218 +1750,197 @@ const CertificateLayout = React.forwardRef(({ data, formatChemicalValue }, ref) 
     } else if (typeof data.test_line_items === 'string') {
       try {
         const parsed = JSON.parse(data.test_line_items);
-        if (Array.isArray(parsed)) testMessages = parsed;
-        else testMessages = [data.test_line_items];
+        testMessages = Array.isArray(parsed) ? parsed : [data.test_line_items];
       } catch {
         testMessages = [data.test_line_items];
       }
     }
   }
 
+  // Header section component (repeated on every page)
   const HeaderSection = () => (
-    <table style={styles.table}>
-      <tbody>
-        <tr>
-          <td colSpan="11" style={{ ...styles.cell, ...styles.textLeft, borderBottom: 'none', borderRight: 'none', fontSize: '10px' }}>
-            Format No. : ICCL/QC/R/14, Rev 01, Date: 01/04/2024
-          </td>
-          <td colSpan="6" style={{ ...styles.cell, ...styles.textRight, borderBottom: 'none', borderLeft: 'none', fontSize: '10px' }}>
-            C.R. 2055012479
-          </td>
-          <td rowSpan="2" style={{ ...styles.cell, width: '110px' }}>
-            <img src={logo} alt="ICCL" style={{ width: '90px', display: 'block', margin: '0 auto' }} crossOrigin="anonymous" />
-          </td>
-        </tr>
-
-        <tr>
-          <td colSpan="17" style={{ ...styles.cell, padding: '6px 15px' }}>
-            <div style={{ textAlign: 'center' }}>
-              <span style={styles.companyTitle}>Instrumentation & Controls Co. Ltd. (ICCL).</span>
-              <span style={styles.arabic}>شركة الآلات الدقيقة والتحكم المحدودة</span>
-              <div style={styles.address}>
-                Lot #56, Block #02, Section G, Support Industries, Jubail 2, P.O. Box No. 11300, Jubail – 31961 KSA  
-                Email:info@icclksa.com , Web:www.icclksa.com
-              </div>
-            </div>
-          </td>
-        </tr>
-
-        <tr>
-          <td colSpan="13" style={{ ...styles.cell, ...styles.bold, fontSize: '14px' }}>
-            MATERIAL TESTING REPORT AND GUARANTEE CERTIFICATE
-          </td>
-          <td colSpan="5" style={{ padding: 0, border: '1px solid #000' }}>
-            <table style={styles.nestedTable}>
-              <tbody>
-                <tr>
-                  <td style={{ ...styles.nestedCell, borderBottom: '1px solid #000', fontWeight: 'bold', borderLeft: 'none', textAlign: 'right', width: '191px'}}>
-                    CERT.NO.:
-                  </td>
-                  <td style={{ ...styles.nestedCell, borderBottom: '1px solid #000', fontWeight: 'bold' }}>
-                    {data.cert_no || '—'}
-                  </td>
-                </tr>
-                <tr>
-                  <td style={{ ...styles.nestedCell, fontWeight: 'bold', borderLeft: 'none', textAlign: 'right' }}>
-                    DATE:
-                  </td>
-                  <td style={{ ...styles.nestedCell, fontWeight: 'bold' }}>
-                    {getFormattedDate(data.cert_date)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </td>
-        </tr>
-
-        <tr>
-          <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textRight }}>CUSTOMER NAME</td>
-          <td colSpan="10" style={{ ...styles.cell, ...styles.textLeft, ...styles.bold }}>
-            {displayValue(data.customer_name)}
-          </td>
-          <td colSpan="3" style={{ ...styles.cell, ...styles.bold, textAlign: 'right' }}>Delivery Note No.:</td>
-          <td colSpan="2" style={{ ...styles.cell, ...styles.bold, textAlign: 'left', fontSize: '13px', paddingLeft: '10px' }}>
-            {displayValue(data.delivery_note_no)}
-          </td>
-        </tr>
-
-        <tr>
-          <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textRight }}>P.O.NO.</td>
-          <td colSpan="5" style={{ ...styles.cell, ...styles.textLeft }}>{displayValue(data.po_no)}</td>
-          <td colSpan="2" style={{ ...styles.cell, ...styles.bold }}>P.O.Date:</td>
-          <td colSpan="3" style={styles.cell}>{displayValue(data.po_date)}</td>
-          <td colSpan="3" style={{ ...styles.cell, ...styles.bold, textAlign: 'right' }}>Date:</td>
-          <td colSpan="2" style={{ ...styles.cell, ...styles.textLeft }}>{displayValue(data.delivery_date)}</td>
-        </tr>
-      </tbody>
-    </table>
-  );
-
-  const ItemsHeaderRow = () => (
     <>
-      <tr style={styles.bold}>
-        <td style={{ ...styles.cell, width: '38px' }}>PO<br />L/1</td>
-        <td style={{ ...styles.cell, width: '153.5px' }}>ITEM & SIZE</td>
-        <td style={{ ...styles.cell, width: '82px' }}>RAW<br />MTL. SIZE</td>
-        <td style={{ ...styles.cell, width: '60px' }}>T.C.NO.</td>
-        <td style={{ ...styles.tracecell, width: '81px' }}>Traceability<br />no-</td>
-        <td colSpan="11" style={{ ...styles.cell}}>CHEMICAL COMPOSITION %</td>
-        <td style={{ ...styles.cell, width: '48px' }}>QTY<br />PCS</td>
-        <td style={{ ...styles.cell, width: '126px' }}>MATL.<br />Conf.To</td>
+      <tr>
+        <td colSpan="13" style={{ ...styles.cell, ...styles.textLeft, borderBottom: '0.5px solid #999', borderRight: 'none', fontSize: '9px' }}>
+          Format No. : ICCL/QC/R/14, Rev 01, Date: 01/04/2024
+        </td>
+        <td colSpan="6" style={{ ...styles.cell, ...styles.textRight, borderBottom: '0.5px solid #999', borderLeft: 'none', fontSize: '9px' }}>
+          C.R. 2055012479
+        </td>
+        <td rowSpan="2" style={{ ...styles.cell, width: '85px', padding: '4px' }}>
+          <img src={logo} alt="ICCL" style={{ width: '70px', display: 'block', margin: '0 auto' }} crossOrigin="anonymous" />
+        </td>
       </tr>
-
-      <tr style={{ ...styles.bold, fontSize: '10px' }}>
-        <td colSpan="5" style={{ ...styles.cell}}></td>
+      <tr>
+        <td colSpan="19" style={{ ...styles.cell, padding: '10px 8px' }}>
+          <div style={{ textAlign: 'center' }}>
+            <span style={styles.companyTitle}>Instrumentation & Controls Co. Ltd. (ICCL).</span>
+            <span style={styles.arabic}>شركة الآلات الدقيقة والتحكم المحدودة</span>
+            <div style={styles.address}>
+              Lot #56, Block #02, Section G, Support Industries, Jubail 2, P.O. Box No. 11300, Jubail – 31961 KSA<br/>
+              Email: info@icclksa.com , Web: www.icclksa.com
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td colSpan="15" style={{ ...styles.cell, ...styles.bold, fontSize: '13px', padding: '8px 2px' }}>
+          MATERIAL TESTING REPORT AND GUARANTEE CERTIFICATE
+        </td>
+        <td colSpan="5" style={{ padding: 0, border: '0.5px solid #999' }}>
+          <table style={styles.nestedTable}>
+            <tbody>
+              <tr>
+                <td style={{ ...styles.nestedCell, borderBottom: '0.5px solid #999', fontWeight: 'bold', width: '151.5px', ...styles.textRight }}>CERT.NO.:</td>
+                <td style={{ ...styles.nestedCell, borderBottom: '0.5px solid #999' }}>{data.cert_no || '—'}</td>
+              </tr>
+              <tr>
+                <td style={{ ...styles.nestedCell, fontWeight: 'bold', ...styles.textRight }}>DATE:</td>
+                <td style={{ ...styles.nestedCell }}>{getFormattedDate(data.cert_date)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td colSpan="4" style={{ ...styles.cell, ...styles.bold, ...styles.textRight, padding: '8px 8px 4px 2px' }}>CUSTOMER NAME</td>
+        <td colSpan="11" style={{ ...styles.cell, ...styles.textLeft, ...styles.bold, padding: '8px 2px 4px 8px' }}>{displayValue(data.customer_name)}</td>
+        <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textRight, width: '171px', padding: '8px 8px 4px 2px' }}>Delivery Note No.:</td>
+        <td colSpan="2" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(data.delivery_note_no)}</td>
+      </tr>
+      <tr>
+        <td colSpan="4" style={{ ...styles.cell, ...styles.bold, ...styles.textRight, padding: '8px 8px 4px 2px' }}>P.O.NO.</td>
+        <td colSpan="5" style={{ ...styles.cell, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(data.po_no)}</td>
+        <td colSpan="2" style={{ ...styles.cell, ...styles.bold, padding: '8px 2px 4px 2px' }}>P.O.Date:</td>
+        <td colSpan="4" style={{ ...styles.cell, padding: '8px 2px 4px 2px' }}>{displayValue(data.po_date)}</td>
+        <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textRight, padding: '8px 8px 4px 2px' }}>Date:</td>
+        <td colSpan="2" style={{ ...styles.cell, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(data.delivery_date)}</td>
+      </tr>
+      <tr style={styles.bold}>
+        <td rowSpan="2" style={{ ...styles.cell, width: '3.5%', padding: '8px 2px 4px 2px' }}>PO<br />L/1</td>
+        <td colSpan="3" rowSpan="2" style={{ ...styles.cell, width: '16%', padding: '8px 2px 4px 2px' }}>ITEM & SIZE</td>
+        <td rowSpan="2" style={{ ...styles.cell, width: '7%', padding: '8px 2px 4px 2px' }}>RAW<br />MTL. SIZE</td>
+        <td rowSpan="2" style={{ ...styles.cell, width: '6%', padding: '8px 2px 4px 2px' }}>T.C.NO.</td>
+        <td rowSpan="2" style={{ ...styles.cell, width: '7%', padding: '8px 2px 4px 2px' }}>Traceability<br />no-</td>
+        <td colSpan="11" style={{ ...styles.cell, padding: '8px 2px 4px 2px' }}>CHEMICAL COMPOSITION %</td>
+        <td rowSpan="2" style={{ ...styles.cell, width: '4%', padding: '8px 2px 4px 2px' }}>QTY<br />PCS</td>
+        <td rowSpan="2" style={{ ...styles.cell, width: '10%', padding: '8px 2px 4px 2px' }}>MATL.<br />Conf.To</td>
+      </tr>
+      <tr style={{ ...styles.bold }}>
         {['C','Cr','Ni','Mo','Mn','Si','S','P','Cu','Fe','Co'].map(c => (
-          <td key={c} style={{ ...styles.cell, width: '55px' }}>{c}</td>
+          <td key={c} style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{c}</td>
         ))}
-        <td colSpan="2" style={styles.cell}></td>
       </tr>
     </>
   );
 
+  // Footer section component (appears only on last page)
   const FooterSection = () => (
-    <table style={styles.table}>
-      <tbody>
+    <>
+      {testMessages.length > 0 && (
         <tr>
-          <td colSpan="11" style={{ ...styles.cell, textAlign: 'left', padding: '12px 10px', fontSize: '11px' }}>
-            <span style={styles.bold}>
-              WE GUARANTEE ABOVE MATERIAL AGAINST ANY MANUFACTURING DEFECT FOR 12 MONTHS <br />
-              FROM DATE OF SUPPLY OR 6 MONTHS FROM DATE OF INSTALLATION WHICHEVER IS EARLIER
-            </span>
-          </td>
-          <td colSpan="7" style={{ ...styles.cell, height: '158px', verticalAlign: 'top', padding: '12px', textAlign: 'center' }}>
-            <div style={styles.bold}>FOR Instrumentation & Controls Co. Ltd</div>
-            {signatureImage && (
-              <img
-                src={signatureImage}
-                alt="Signature"
-                style={styles.signatureImg}
-                crossOrigin="anonymous"
-              />
-            )}
+          <td colSpan="20" style={{ ...styles.cell, textAlign: 'left', padding: '12px 8px', lineHeight: '1.5' }}>
+            {testMessages.map((msg, i) => (
+              <div key={i} style={{ marginBottom: '6px' }}>{msg}</div>
+            ))}
           </td>
         </tr>
-      </tbody>
-    </table>
+      )}
+      <tr>
+        <td colSpan="12" style={{ ...styles.cell, textAlign: 'left', padding: '12px 8px', lineHeight: '1.4' }}>
+          <span style={{ ...styles.bold, fontSize: '9px' }}>
+            WE GUARANTEE ABOVE MATERIAL AGAINST ANY MANUFACTURING DEFECT FOR 12 MONTHS <br />
+            FROM DATE OF SUPPLY OR 6 MONTHS FROM DATE OF INSTALLATION WHICHEVER IS EARLIER
+          </span>
+        </td>
+        <td colSpan="8" style={{ ...styles.cell, height: '140px', verticalAlign: 'top', padding: '12px 8px' }}>
+          <div style={styles.bold}>FOR Instrumentation & Controls Co. Ltd</div>
+          {signatureImage && (
+            <img src={signatureImage} alt="Signature" style={styles.signatureImg} crossOrigin="anonymous" />
+          )}
+        </td>
+      </tr>
+    </>
   );
 
+  // Calculate rows per page based on content height
+  // You can adjust this number based on your PDF page size (A4 landscape)
+  const ROWS_PER_PAGE = 12; // Reduced to accommodate header space
+  
+  // Split items into pages
+  const pages = [];
+  for (let i = 0; i < processedItems.length; i += ROWS_PER_PAGE) {
+    pages.push(processedItems.slice(i, i + ROWS_PER_PAGE));
+  }
+
+  // If no items, still show one page with header and footer
+  if (pages.length === 0) {
+    pages.push([]);
+  }
+
   return (
-    <div style={{ overflowX: 'auto', padding: '12px 0' }} ref={ref}>
+    <div style={{ overflowX: 'auto', padding: '10px' }} ref={ref}>
       <div style={styles.reportContainer}>
-        <div style={styles.page}>
-          <HeaderSection />
-
-          <table style={styles.table}>
-            <tbody>
-              <ItemsHeaderRow />
-
-              {processedItems.map((item, idx) => (
-                <tr
-                  key={idx}
-                  className="item-row"
-                  style={{
-                    pageBreakInside: 'avoid',
-                    breakInside: 'avoid',
-                  }}
-                >
-                  <td style={styles.cell}>{item.displayPo}</td>
-                  <td style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>
-                    {displayValue(item.item_size)}
-                  </td>
-                  <td style={styles.cell}>{displayValue(item.raw_material_size)}</td>
-                  <td style={styles.cell}>{displayValue(item.tc_no)}</td>
-                  <td style={styles.tracecell}>{displayValue(item.traceability_no)}</td>
-                  <td style={styles.cell}>{formatChemicalValue(item.c)}</td>
-                  <td style={styles.cell}>{formatChemicalValue(item.cr)}</td>
-                  <td style={styles.cell}>{formatChemicalValue(item.ni)}</td>
-                  <td style={styles.cell}>{formatChemicalValue(item.mo)}</td>
-                  <td style={styles.cell}>{formatChemicalValue(item.mn)}</td>
-                  <td style={styles.cell}>{formatChemicalValue(item.si)}</td>
-                  <td style={styles.cell}>{formatChemicalValue(item.s)}</td>
-                  <td style={styles.cell}>{formatChemicalValue(item.p)}</td>
-                  <td style={styles.cell}>{formatChemicalValue(item.cu)}</td>
-                  <td style={styles.cell}>{formatChemicalValue(item.fe)}</td>
-                  <td style={styles.cell}>{formatChemicalValue(item.co)}</td>
-                  <td style={styles.cell}>{displayValue(item.qty_pcs)}</td>
-                  <td style={{ ...styles.cell, ...styles.textLeft }}>
-                    {displayValue(item.material_grade)}
-                  </td>
-                </tr>
-              ))}
-
-              {testMessages.length > 0 && (
-                <tr>
-                  <td
-                    colSpan="18"
-                    style={{
-                      ...styles.cell,
-                      textAlign: 'left',
-                      padding: '20px 16px',
-                      whiteSpace: 'pre-line',
-                      lineHeight: '1.55',
-                      pageBreakInside: 'avoid',
-                      breakInside: 'avoid',
-                    }}
-                  >
-                    {testMessages.map((msg, i) => (
-                      <div key={i} style={{ marginBottom: i < testMessages.length - 1 ? '28px' : '0' }}>
-                        {msg}
-                      </div>
-                    ))}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginTop: 'auto' }}>
-            <FooterSection />
-          </div>
-        </div>
+        {pages.map((pageItems, pageIndex) => {
+          const isLastPage = pageIndex === pages.length - 1;
+          
+          return (
+            <div 
+              key={pageIndex} 
+              style={isLastPage ? styles.lastPage : styles.page}
+              className="pdf-page"
+            >
+              <table style={styles.table}>
+                <tbody>
+                  {/* Header on EVERY page - always displays first */}
+                  <HeaderSection />
+                  
+                  {/* Items for this page - displays right after header */}
+                  {pageItems.length > 0 ? (
+                    pageItems.map((item, idx) => (
+                      <tr key={`${pageIndex}-${idx}`}>
+                        <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{item.displayPo}</td>
+                        <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(item.item_size)}</td>
+                        <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.raw_material_size)}</td>
+                        <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.tc_no)}</td>
+                        <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.traceability_no)}</td>
+                        <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.c)}</td>
+                        <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.cr)}</td>
+                        <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.ni)}</td>
+                        <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.mo)}</td>
+                        <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.mn)}</td>
+                        <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.si)}</td>
+                        <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.s)}</td>
+                        <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.p)}</td>
+                        <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.cu)}</td>
+                        <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.fe)}</td>
+                        <td style={{...styles.chemicalCell, padding: '8px 1px 4px 1px'}}>{formatChemicalValue(item.co)}</td>
+                        <td style={{...styles.cell, padding: '8px 2px 4px 2px'}}>{displayValue(item.qty_pcs)}</td>
+                        <td style={{ ...styles.cell, ...styles.textLeft, padding: '8px 2px 4px 8px' }}>{displayValue(item.material_grade)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    // Empty row when no items (should not happen, but just in case)
+                    <tr>
+                      <td colSpan="20" style={styles.cell}>No items to display</td>
+                    </tr>
+                  )}
+                  
+                  {/* Footer - only on last page, appears after all items */}
+                  {isLastPage && <FooterSection />}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 });
 
+
+
+
 export default ViewSheets;
+
+

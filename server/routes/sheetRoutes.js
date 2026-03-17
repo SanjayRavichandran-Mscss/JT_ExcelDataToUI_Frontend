@@ -24,6 +24,9 @@ const {
   bulkValidateExcel,
   getNextCertNumber,
   getRecordsByTraceabilityNos,
+  checkTraceabilityUnique,
+  checkTraceabilityNosUnique,
+  getPressuresBySizes
 } = require('../controllers/sheetController');
 
 const multer = require('multer');
@@ -39,6 +42,11 @@ router.get('/records', getAllRecords);              // GET    /api/sheet/records
 router.put('/records/:id', updateRecord);           // PUT    /api/sheet/records/:id
 router.delete('/records/:id', deleteRecord);        // DELETE /api/sheet/records/:id
 
+
+
+
+router.get('/check-traceability-unique', checkTraceabilityUnique);
+router.post('/check-traceability-bulk', checkTraceabilityNosUnique);
 
 router.get('/records/by-tc', getRecordByTcNo);          // GET /api/sheet/records/by-tc?tc_no=ABC123
 
@@ -78,10 +86,14 @@ router.post('/bulk-validate', upload.single('file'), bulkValidateExcel);
 router.post('/bulk-records', upload.single('file'), bulkuploadrecords);
 
 
-
 router.get('/next-cert-number', getNextCertNumber);
 
 router.get('/records/by-traceabilities', getRecordsByTraceabilityNos);
+
+
+
+
+router.post('/pressures/by-sizes', getPressuresBySizes);
 
 
 

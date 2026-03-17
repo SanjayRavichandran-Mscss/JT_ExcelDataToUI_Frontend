@@ -205,13 +205,13 @@ const RecordsLimitValues = () => {
               Define minimum and maximum allowed values for chemical composition
             </p>
           </div>
-          {/* <button
+          <button
             onClick={() => openModal(false)}
             disabled={loading || submitting}
             className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-xl shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="mr-2 text-lg">+</span> Add New Limit
-          </button> */}
+          </button>
         </div>
 
         {/* Table Card */}

@@ -73,6 +73,114 @@ exports.createRecord = async (req, res) => {
 };
 
 
+// Check if traceability_no is already used (excluding the current record when editing)
+exports.checkTraceabilityUnique = async (req, res) => {
+  try {
+    const { traceability_no, exclude_id } = req.query;
+
+    if (!traceability_no || traceability_no.trim() === '') {
+      return res.json({
+        success: true,
+        isUnique: true,
+        message: "Empty traceability number is considered unique"
+      });
+    }
+
+    let query = `
+      SELECT COUNT(*) as count 
+      FROM records 
+      WHERE traceability_no = ?
+    `;
+    let params = [traceability_no.trim()];
+
+    // When editing → exclude the current record
+    if (exclude_id && !isNaN(Number(exclude_id))) {
+      query += ` AND id != ?`;
+      params.push(Number(exclude_id));
+    }
+
+    const [rows] = await db.query(query, params);
+
+    const count = rows[0]?.count || 0;
+
+    res.json({
+      success: true,
+      isUnique: count === 0,
+      message: count === 0 ? "Available" : "Already in use"
+    });
+  } catch (err) {
+    console.error("Error checking traceability uniqueness:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to check traceability number uniqueness",
+      error: err.message
+    });
+  }
+};
+
+
+
+
+
+
+
+// Check uniqueness for multiple traceability numbers at once (for bulk)
+exports.checkTraceabilityNosUnique = async (req, res) => {
+  try {
+    const { traceability_nos } = req.body;
+
+    if (!Array.isArray(traceability_nos) || traceability_nos.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "traceability_nos must be a non-empty array"
+      });
+    }
+
+    // Remove empty / whitespace-only values
+    const cleanedNos = [...new Set(
+      traceability_nos
+        .map(n => String(n || '').trim())
+        .filter(n => n.length > 0)
+    )];
+
+    if (cleanedNos.length === 0) {
+      return res.json({
+        success: true,
+        duplicates: [],
+        message: "No valid traceability numbers to check"
+      });
+    }
+
+    const placeholders = cleanedNos.map(() => '?').join(',');
+    const [rows] = await db.query(
+      `SELECT traceability_no 
+       FROM records 
+       WHERE traceability_no IN (${placeholders})`,
+      cleanedNos
+    );
+
+    const existing = new Set(rows.map(r => r.traceability_no));
+
+    const duplicates = cleanedNos.filter(n => existing.has(n));
+
+    res.json({
+      success: true,
+      duplicates,           // array of values that already exist
+      uniqueCount: cleanedNos.length - duplicates.length,
+      duplicateCount: duplicates.length
+    });
+
+  } catch (err) {
+    console.error("Bulk traceability check error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to check traceability uniqueness",
+      error: err.message
+    });
+  }
+};
+
 exports.createMultipleRecords = async (req, res) => {
   try {
     const records = req.body; // array of objects
@@ -1758,3 +1866,254 @@ exports.getRecordsByTraceabilityNos = async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Add this new function to sheetController.js
+exports.getPressuresBySizes = async (req, res) => {
+  try {
+    const { sizes } = req.body;
+
+    if (!Array.isArray(sizes) || sizes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'sizes array is required'
+      });
+    }
+
+    // Clean and deduplicate sizes
+    const uniqueSizes = [...new Set(sizes.filter(s => s && typeof s === 'string' && s.trim()))];
+    
+    if (uniqueSizes.length === 0) {
+      return res.json({
+        success: true,
+        pressures: {}
+      });
+    }
+
+    // Fetch all pressures from database
+    const [allPressures] = await db.query(
+      `SELECT size, working_pressure, test_pressure FROM pressures`
+    );
+
+    // Function to extract size value with priority
+    const extractSizeValue = (sizeStr) => {
+      if (!sizeStr || typeof sizeStr !== 'string') return null;
+      
+      const cleaned = sizeStr.trim();
+      
+      // Priority 1: Extract K value (e.g., 3K, 6K, 10K, 15K, 20K, 30K)
+      const kMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*K/i);
+      if (kMatch) {
+        return {
+          value: parseInt(kMatch[1], 10),
+          type: 'K',
+          original: cleaned
+        };
+      }
+      
+      // Priority 2: Extract OD/Inch value
+      // Pattern for fractions like 1/4", 3/8", 1/2"
+      const fractionMatch = cleaned.match(/(\d+)\/(\d+)(?:\s*"?\s*OD)?/i);
+      if (fractionMatch) {
+        const numerator = parseInt(fractionMatch[1], 10);
+        const denominator = parseInt(fractionMatch[2], 10);
+        return {
+          value: numerator / denominator,
+          type: 'OD',
+          original: cleaned,
+          unit: 'inch'
+        };
+      }
+      
+      // Pattern for decimal inches like 1", 0.75"
+      const decimalInchMatch = cleaned.match(/(\d+(?:\.\d+)?)(?:\s*"?\s*OD)?/i);
+      if (decimalInchMatch) {
+        return {
+          value: parseFloat(decimalInchMatch[1]),
+          type: 'OD',
+          original: cleaned,
+          unit: 'inch'
+        };
+      }
+      
+      // Priority 3: Extract MM value
+      const mmMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*MM/i);
+      if (mmMatch) {
+        return {
+          value: parseFloat(mmMatch[1]),
+          type: 'MM',
+          original: cleaned,
+          unit: 'mm'
+        };
+      }
+      
+      return null;
+    };
+
+    // Function to normalize pressure size for comparison
+    const normalizePressureSize = (pressureSize) => {
+      if (!pressureSize || typeof pressureSize !== 'string') return null;
+      
+      const ps = pressureSize.trim();
+      
+      // Handle K values in pressure table
+      const kMatch = ps.match(/(\d+(?:\.\d+)?)\s*K/i);
+      if (kMatch) {
+        return {
+          value: parseInt(kMatch[1], 10),
+          type: 'K',
+          original: ps
+        };
+      }
+      
+      // Handle fraction formats in pressure table
+      const fractionMatch = ps.match(/(\d+)\/(\d+)(?:\s*OD)?/i);
+      if (fractionMatch) {
+        const numerator = parseInt(fractionMatch[1], 10);
+        const denominator = parseInt(fractionMatch[2], 10);
+        return {
+          value: numerator / denominator,
+          type: 'OD',
+          original: ps,
+          unit: 'inch'
+        };
+      }
+      
+      // Handle decimal formats
+      const decimalMatch = ps.match(/(\d+(?:\.\d+)?)(?:\s*OD)?/i);
+      if (decimalMatch) {
+        // Check if it's likely an OD value
+        if (ps.includes('OD') || ps.includes('"')) {
+          return {
+            value: parseFloat(decimalMatch[1]),
+            type: 'OD',
+            original: ps,
+            unit: 'inch'
+          };
+        }
+      }
+      
+      // Handle MM values
+      const mmMatch = ps.match(/(\d+(?:\.\d+)?)\s*MM/i);
+      if (mmMatch) {
+        return {
+          value: parseFloat(mmMatch[1]),
+          type: 'MM',
+          original: ps,
+          unit: 'mm'
+        };
+      }
+      
+      return null;
+    };
+
+    // Process each size and find matching pressure
+    const pressureMap = {};
+    const tolerance = 0.001; // For floating point comparison
+
+    for (const size of uniqueSizes) {
+      const extracted = extractSizeValue(size);
+      if (!extracted) continue;
+
+      let bestMatch = null;
+      let bestMatchPriority = 999;
+
+      for (const pressure of allPressures) {
+        const normalized = normalizePressureSize(pressure.size);
+        if (!normalized) continue;
+
+        // Check if types match (K, OD, MM)
+        if (extracted.type === normalized.type) {
+          // Direct type match - highest priority
+          if (extracted.type === 'K') {
+            // K values should match exactly
+            if (extracted.value === normalized.value) {
+              const priority = 1; // K has highest priority
+              if (priority < bestMatchPriority) {
+                bestMatch = pressure;
+                bestMatchPriority = priority;
+                break; // K match found, no need to continue
+              }
+            }
+          } else if (extracted.type === 'OD') {
+            // Compare inch values
+            if (Math.abs(extracted.value - normalized.value) < tolerance) {
+              const priority = 2; // OD has second priority
+              if (priority < bestMatchPriority) {
+                bestMatch = pressure;
+                bestMatchPriority = priority;
+              }
+            }
+          } else if (extracted.type === 'MM') {
+            // Compare mm values directly
+            if (Math.abs(extracted.value - normalized.value) < tolerance) {
+              const priority = 3; // MM has lowest priority
+              if (priority < bestMatchPriority) {
+                bestMatch = pressure;
+                bestMatchPriority = priority;
+              }
+            }
+          }
+        } else {
+          // Cross-unit comparison (e.g., inch to mm)
+          // This is a fallback if no direct type match found
+          if (extracted.type === 'OD' && normalized.type === 'MM') {
+            // Convert extracted inch to mm
+            const inchToMm = extracted.value * 25.4;
+            if (Math.abs(inchToMm - normalized.value) < tolerance) {
+              const priority = 4; // Cross-unit has lowest priority
+              if (priority < bestMatchPriority) {
+                bestMatch = pressure;
+                bestMatchPriority = priority;
+              }
+            }
+          } else if (extracted.type === 'MM' && normalized.type === 'OD') {
+            // Convert extracted mm to inch
+            const mmToInch = extracted.value / 25.4;
+            if (Math.abs(mmToInch - normalized.value) < tolerance) {
+              const priority = 4;
+              if (priority < bestMatchPriority) {
+                bestMatch = pressure;
+                bestMatchPriority = priority;
+              }
+            }
+          }
+        }
+      }
+
+      if (bestMatch) {
+        pressureMap[size] = {
+          size: bestMatch.size,
+          working_pressure: bestMatch.working_pressure,
+          test_pressure: bestMatch.test_pressure
+        };
+      }
+    }
+
+    res.json({
+      success: true,
+      pressures: pressureMap
+    });
+
+  } catch (error) {
+    console.error('Error in getPressuresBySizes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pressures by sizes',
+      error: error.message
+    });
+  }
+};

@@ -1,6 +1,8 @@
-// import React, { useState, useEffect, useRef } from 'react';
-// import { Plus, X, Loader2, Download, Upload, Search, RotateCcw } from 'lucide-react';
+// // CreateRecords.jsx
+// import React, { useState, useEffect } from 'react';
+// import { Plus, X, Loader2, RotateCcw, Search, Upload } from 'lucide-react';
 // import Select from 'react-select';
+// import CreateBulkRecords from './CreateBulkRecords';
 
 // const API_BASE = 'http://localhost:5000/api/sheet';
 
@@ -30,17 +32,9 @@
 //   });
 //   const [fieldErrors, setFieldErrors] = useState({});
 
-//   // Bulk states
+//   // State for bulk modal
 //   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-//   const [bulkFile, setBulkFile] = useState(null);
-//   const [bulkValidating, setBulkValidating] = useState(false);
-//   const [bulkUploading, setBulkUploading] = useState(false);
-//   const [validationResults, setValidationResults] = useState([]);
-//   const [allRowsValid, setAllRowsValid] = useState(false);
-//   const [validationSummary, setValidationSummary] = useState({ total: 0, valid: 0, invalid: 0 });
-//   const [componentCounts, setComponentCounts] = useState({ valid: 0, invalid: 0 });
 
-//   const fileInputRef = useRef(null);
 //   const chemicalComponents = ['c', 'cr', 'ni', 'mo', 'mn', 'si', 's', 'p', 'cu', 'fe', 'co'];
 
 //   useEffect(() => {
@@ -61,7 +55,6 @@
 //     }
 //   }, [formData.material_grade, isModalOpen]);
 
-//   // Live validation in modal
 //   useEffect(() => {
 //     if (!isModalOpen || !formData.material_grade) return;
 //     validateChemicalFields();
@@ -129,7 +122,13 @@
 //   };
 
 //   const resetFilters = () => {
-//     setFilters({ tc_no: '', traceability_no: '', heat_no: '', size: '', material_grade: '' });
+//     setFilters({
+//       tc_no: '',
+//       traceability_no: '',
+//       heat_no: '',
+//       size: '',
+//       material_grade: '',
+//     });
 //   };
 
 //   const openModal = (record = null) => {
@@ -243,168 +242,6 @@
 //     }
 //   };
 
-//   const downloadTemplate = () => {
-//     try {
-//       const link = document.createElement('a');
-//       link.href = '/RecordsTemplate/RecordsTemplate.xlsx';
-//       link.download = 'RecordsTemplate.xlsx';
-//       document.body.appendChild(link);
-//       link.click();
-//       document.body.removeChild(link);
-//       setMessage({ text: 'Template downloaded successfully', type: 'success' });
-//       setTimeout(() => setMessage({ text: '', type: '' }), 3000);
-//     } catch (error) {
-//       console.error('Error downloading template:', error);
-//       setMessage({ text: 'Failed to download template', type: 'error' });
-//     }
-//   };
-
-//   const handleFileSelected = async (e) => {
-//     const file = e.target.files?.[0];
-//     if (!file) return;
-
-//     setBulkFile(file);
-//     setValidationResults([]);
-//     setAllRowsValid(false);
-//     setValidationSummary({ total: 0, valid: 0, invalid: 0 });
-//     setComponentCounts({ valid: 0, invalid: 0 });
-//     setBulkValidating(true);
-
-//     const formData = new FormData();
-//     formData.append('file', file);
-
-//     try {
-//       const res = await fetch(`${API_BASE}/bulk-validate`, {
-//         method: 'POST',
-//         body: formData,
-//       });
-
-//       const data = await res.json();
-
-//       if (res.ok && data.success) {
-//         let processed = (data.validationResults || []).map(r => ({
-//           ...r,
-//           rowData: r.rowData || r.data || {}
-//         }));
-
-//         // FIX: Detect & correct shifted rows (common when size is split)
-//         processed = processed.map((item, idx) => {
-//           const row = item.rowData || {};
-//           let fixedRow = { ...row };
-
-//           // If 'c' looks like a size (contains 'mm' or number+mm), likely shifted
-//           if (row.c && (String(row.c).includes('mm') || /^\d+\.\d+\s*mm/.test(String(row.c)))) {
-//             console.warn(`Row ${item.row || idx + 2} seems shifted → fixing size column`);
-
-//             fixedRow.size = `${row.size || ''} ${row.c}`.trim();
-//             fixedRow.c = row.cr || '';
-//             fixedRow.cr = row.ni || '';
-//             fixedRow.ni = row.mo || '';
-//             fixedRow.mo = row.mn || '';
-//             fixedRow.mn = row.si || '';
-//             fixedRow.si = row.s || '';
-//             fixedRow.s = row.p || '';
-//             fixedRow.p = row.cu || '';
-//             fixedRow.cu = row.fe || '';
-//             fixedRow.fe = row.co || '';
-//             fixedRow.co = '';
-//           }
-
-//           return {
-//             ...item,
-//             rowData: fixedRow
-//           };
-//         });
-
-//         setValidationResults(processed);
-
-//         // Determine if all rows are now valid
-//         const hasInvalid = processed.some(item => {
-//           if (!item.message) return false;
-//           const msg = String(item.message).toLowerCase();
-//           return msg.includes('outside allowed range') ||
-//                  msg.includes('is required') ||
-//                  msg.includes('invalid') ||
-//                  msg.includes('error');
-//         });
-
-//         setAllRowsValid(!hasInvalid);
-
-//         setValidationSummary({
-//           total: data.totalRows || processed.length || 0,
-//           valid: data.validCount || processed.filter(r => !r.message).length,
-//           invalid: data.invalidCount || processed.filter(r => r.message).length,
-//         });
-
-//         // Component count
-//         let v = 0, inv = 0;
-//         processed.forEach(item => {
-//           if (!item.message) {
-//             v += 11;
-//           } else {
-//             const errors = (String(item.message).match(/outside allowed range/gi) || []).length;
-//             inv += errors;
-//             v += (11 - errors);
-//           }
-//         });
-//         setComponentCounts({ valid: v, invalid: inv });
-//       } else {
-//         setMessage({ text: data.message || 'Validation failed', type: 'error' });
-//       }
-//     } catch (err) {
-//       console.error('Validation error:', err);
-//       setMessage({ text: 'Failed to validate file – network error', type: 'error' });
-//     } finally {
-//       setBulkValidating(false);
-//     }
-//   };
-
-//   const handleBulkUpload = async () => {
-//     if (!bulkFile || !allRowsValid) {
-//       setMessage({ text: 'Cannot upload: file missing or validation failed', type: 'error' });
-//       return;
-//     }
-
-//     setBulkUploading(true);
-//     setMessage({ text: '', type: '' });
-
-//     const formData = new FormData();
-//     formData.append('file', bulkFile);
-
-//     try {
-//       const res = await fetch(`${API_BASE}/bulk-records`, {
-//         method: 'POST',
-//         body: formData,
-//       });
-
-//       const data = await res.json();
-
-//       if (res.ok && data.success) {
-//         setMessage({
-//           text: `Successfully imported ${data.insertedCount || 0} record(s)`,
-//           type: 'success',
-//         });
-//         await fetchRecords();
-//         setIsBulkModalOpen(false);
-//         setBulkFile(null);
-//         setValidationResults([]);
-//         setAllRowsValid(false);
-//         setValidationSummary({ total: 0, valid: 0, invalid: 0 });
-//         setComponentCounts({ valid: 0, invalid: 0 });
-//       } else {
-//         setMessage({
-//           text: data.message || 'Upload failed – check server logs',
-//           type: 'error',
-//         });
-//       }
-//     } catch (err) {
-//       console.error('Upload network error:', err);
-//       setMessage({ text: `Network error: ${err.message}`, type: 'error' });
-//     } finally {
-//       setBulkUploading(false);
-//     }
-//   };
-
 //   const gradeOptions = materialGrades.map(grade => ({
 //     value: grade.id,
 //     label: grade.material_grade
@@ -415,23 +252,17 @@
 //   return (
 //     <div className="min-h-screen bg-gray-50 text-gray-900 p-4 md:p-10">
 //       <div className="max-w-7xl mx-auto">
-//         {/* Header */}
+//         {/* Main Header */}
 //         <div className="flex flex-col md:flex-row justify-between items-center mb-10 border-b-2 border-gray-800 pb-8 gap-6">
 //           <div className="text-center md:text-left">
 //             <h1 className="text-4xl font-extrabold tracking-tight text-black">Test Certificate Records</h1>
 //           </div>
 //           <div className="flex flex-wrap gap-4">
 //             <button
-//               onClick={downloadTemplate}
-//               className="flex items-center gap-2 bg-gray-800 text-white px-5 py-2.5 rounded-md font-medium hover:bg-gray-700 transition shadow cursor-pointer"
-//             >
-//               <Download size={18} /> Download Template
-//             </button>
-//             <button
 //               onClick={() => setIsBulkModalOpen(true)}
 //               className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-md font-medium hover:bg-indigo-700 transition shadow cursor-pointer"
 //             >
-//               <Upload size={18} /> Bulk Upload Excel
+//               <Upload size={18} /> Bulk Upload
 //             </button>
 //             <button
 //               onClick={() => openModal()}
@@ -442,7 +273,7 @@
 //           </div>
 //         </div>
 
-//         {/* Message */}
+//         {/* Global Message */}
 //         {message.text && (
 //           <div className={`mb-6 p-4 border-l-4 font-medium rounded-r-lg ${
 //             message.type === 'success' ? 'bg-green-50 border-green-600 text-green-800' : 'bg-red-50 border-red-600 text-red-800'
@@ -481,7 +312,7 @@
 //           </div>
 //         </div>
 
-//         {/* Table */}
+//         {/* Records Table */}
 //         <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
 //           <div className="overflow-x-auto">
 //             <table className="w-full min-w-[1600px] text-left border-collapse">
@@ -501,7 +332,7 @@
 //                   <tr><td colSpan={7} className="py-20 text-center"><Loader2 className="animate-spin mx-auto" size={32} /></td></tr>
 //                 ) : filteredRecords.length === 0 ? (
 //                   <tr><td colSpan={7} className="py-20 text-center text-gray-500">
-//                     {records.length === 0 ? "No records yet. Add or upload some." : "No matching records found."}
+//                     {records.length === 0 ? "No records yet. Add some." : "No matching records found."}
 //                   </td></tr>
 //                 ) : filteredRecords.map(r => (
 //                   <tr key={r.id} className="hover:bg-gray-50">
@@ -571,6 +402,7 @@
 //                 </button>
 //               </div>
 //               <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6">
+//                 {/* ... rest of single record form remains unchanged ... */}
 //                 <div className="space-y-7">
 //                   <div className="bg-gray-50 p-5 rounded-xl border">
 //                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -709,212 +541,19 @@
 
 //         {/* Bulk Upload Modal */}
 //         {isBulkModalOpen && (
-//           <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 md:p-6">
-//             <div className="bg-white w-full h-full md:w-[90vw] md:max-w-6xl md:max-h-[95vh] md:rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-gray-200">
-//               <div className="flex justify-between items-center p-6 bg-gray-50 border-b">
-//                 <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Bulk Upload Records</h2>
-//                 <button
-//                   onClick={() => {
-//                     setIsBulkModalOpen(false);
-//                     setBulkFile(null);
-//                     setValidationResults([]);
-//                     setAllRowsValid(false);
-//                     setValidationSummary({ total: 0, valid: 0, invalid: 0 });
-//                     setComponentCounts({ valid: 0, invalid: 0 });
+//           <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 overflow-y-auto">
+//             <div className="bg-white w-full max-w-6xl max-h-[96vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
+     
+
+//               {/* Bulk content – no extra header */}
+//               <div className="flex-1 overflow-y-auto">
+//                 <CreateBulkRecords
+//                   onClose={() => setIsBulkModalOpen(false)}
+//                   onRecordsAdded={() => {
+//                     fetchRecords(); // refresh main table after successful bulk upload
+//                     // Modal stays open – user closes manually with X
 //                   }}
-//                   className="p-2 hover:bg-gray-200 rounded-full transition cursor-pointer"
-//                 >
-//                   <X size={32} className="text-gray-700 hover:text-black" />
-//                 </button>
-//               </div>
-
-//               <div className="flex-1 p-6 md:p-8 overflow-y-auto space-y-10">
-//                 {/* File Upload */}
-//                 <div className="border-2 border-dashed border-gray-300 rounded-2xl p-10 md:p-16 text-center bg-gray-50">
-//                   <Upload size={64} className="mx-auto text-gray-400 mb-6" />
-//                   <p className="text-xl md:text-2xl font-medium mb-3">Select or drop your Excel file here</p>
-//                   <p className="text-gray-500 mb-8">Supported formats: .xlsx, .xls</p>
-//                   <input
-//                     type="file"
-//                     ref={fileInputRef}
-//                     accept=".xlsx,.xls"
-//                     onChange={handleFileSelected}
-//                     className="hidden"
-//                   />
-//                   <button
-//                     type="button"
-//                     onClick={() => fileInputRef.current?.click()}
-//                     disabled={bulkValidating}
-//                     className={`px-10 py-4 rounded-xl text-white font-medium text-lg cursor-pointer transition shadow-md ${
-//                       bulkValidating ? 'bg-gray-400 cursor-wait' : 'bg-blue-600 hover:bg-blue-700'
-//                     }`}
-//                   >
-//                     {bulkValidating ? (
-//                       <span className="flex items-center gap-3">
-//                         <Loader2 className="animate-spin" size={24} /> Validating...
-//                       </span>
-//                     ) : (
-//                       'Choose Excel File'
-//                     )}
-//                   </button>
-//                   {bulkFile && (
-//                     <div className="mt-8 text-lg font-medium text-green-700">
-//                       Selected: <span className="font-bold">{bulkFile.name}</span>
-//                     </div>
-//                   )}
-//                 </div>
-
-//                 {/* Validation Results */}
-//                 {validationResults.length > 0 && (
-//                   <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-//                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 flex-wrap">
-//                       <h4 className="text-xl font-bold text-gray-900">Validation Results</h4>
-//                       <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-//                         <div>
-//                           <span className="text-gray-600">Total rows:</span>{' '}
-//                           <strong>{validationSummary.total}</strong>
-//                         </div>
-//                         <div>
-//                           <span className="text-gray-600">Invalid rows:</span>{' '}
-//                           <strong className="text-red-700">{validationSummary.invalid}</strong>
-//                         </div>
-//                         <div>
-//                           <span className="text-gray-600">Invalid components:</span>{' '}
-//                           <strong className="text-red-700">{componentCounts.invalid}</strong>
-//                         </div>
-//                       </div>
-//                     </div>
-
-//                     <div className="space-y-6">
-//                       {validationResults
-//                         .filter(item => {
-//                           const msg = String(item.message || '').toLowerCase();
-//                           return msg.includes('outside allowed range') || 
-//                                  msg.includes('is required') ||
-//                                  msg.includes('invalid') ||
-//                                  msg.includes('error');
-//                         })
-//                         .map((item, idx) => {
-//                           const rowData = item.rowData || {};
-//                           const failedComponents = new Set();
-//                           const errorInfo = {};
-
-//                           if (item.message && typeof item.message === 'string') {
-//                             const parts = item.message.split('|').map(p => p.trim()).filter(Boolean);
-//                             parts.forEach(part => {
-//                               const m = part.match(/([A-Za-z]+):\s*([\d.]+)\s*(?:is )?outside allowed range\s*\(?([\d.-]+)\s*[-–—]\s*([\d.-]+)\)?/i);
-//                               if (m) {
-//                                 const comp = m[1].toUpperCase();
-//                                 failedComponents.add(comp);
-//                                 errorInfo[comp] = { value: m[2], min: m[3], max: m[4] };
-//                               }
-//                               const missing = part.match(/([A-Za-z]+) is required/i);
-//                               if (missing) {
-//                                 const comp = missing[1].toUpperCase();
-//                                 failedComponents.add(comp);
-//                                 errorInfo[comp] = { value: '—', min: '—', max: '—' };
-//                               }
-//                             });
-//                           }
-
-//                           if (failedComponents.size === 0) return null;
-
-//                           return (
-//                             <div key={idx} className="border rounded-lg overflow-hidden shadow-sm bg-red-50/30">
-//                               <div className="px-5 py-3.5 font-bold flex justify-between items-center text-base sm:text-lg bg-red-50 text-red-900">
-//                                 <div>Row {item.row || (idx + 2)}</div>
-//                                 <div className="px-4 py-1.5 rounded-full text-sm sm:text-base font-semibold bg-red-600 text-white">
-//                                   ✗ INVALID
-//                                 </div>
-//                               </div>
-//                               <div className="overflow-x-auto">
-//                                 <table className="w-full text-sm border-collapse">
-//                                   <thead className="bg-gray-100">
-//                                     <tr>
-//                                       <th className="px-5 py-3.5 text-left font-semibold w-28">Component</th>
-//                                       <th className="px-5 py-3.5 text-left font-semibold w-32">Value</th>
-//                                       <th className="px-5 py-3.5 text-left font-semibold">Allowed Range</th>
-//                                       <th className="px-5 py-3.5 text-center font-semibold w-24">Status</th>
-//                                     </tr>
-//                                   </thead>
-//                                   <tbody className="divide-y">
-//                                     {chemicalComponents
-//                                       .filter(comp => failedComponents.has(comp.toUpperCase()))
-//                                       .map(comp => {
-//                                         const upper = comp.toUpperCase();
-//                                         const lower = comp.toLowerCase();
-//                                         let rawValue =
-//                                           errorInfo[upper]?.value ??
-//                                           rowData[upper] ??
-//                                           rowData[lower] ??
-//                                           rowData[comp] ??
-//                                           '—';
-//                                         const displayValue =
-//                                           rawValue !== '—' && !isNaN(parseFloat(rawValue))
-//                                             ? Number(rawValue).toFixed(rawValue < 1 ? 4 : 2)
-//                                             : rawValue;
-//                                         const rangeStr = errorInfo[upper]
-//                                           ? `${errorInfo[upper].min} – ${errorInfo[upper].max}`
-//                                           : (limits[`${lower}_min`] && limits[`${lower}_max`])
-//                                             ? `${limits[`${lower}_min`]} – ${limits[`${lower}_max`]}` : '—';
-
-//                                         return (
-//                                           <tr key={comp} className="bg-red-50/20 hover:bg-red-50">
-//                                             <td className="px-5 py-3.5 font-medium uppercase tracking-wide">{comp}</td>
-//                                             <td className="px-5 py-3.5 font-mono tabular-nums">{displayValue}</td>
-//                                             <td className="px-5 py-3.5 font-mono tabular-nums text-gray-700">{rangeStr}</td>
-//                                             <td className="px-5 py-3.5 text-center text-2xl font-black">
-//                                               <span className="text-red-600">✗</span>
-//                                             </td>
-//                                           </tr>
-//                                         );
-//                                       })}
-//                                   </tbody>
-//                                 </table>
-//                               </div>
-//                             </div>
-//                           );
-//                         })}
-//                     </div>
-
-//                     {validationResults.every(item => {
-//                       const msg = String(item.message || '').toLowerCase();
-//                       return !msg.includes('outside allowed range') && !msg.includes('is required');
-//                     }) && (
-//                       <div className="text-center py-10 text-gray-500 italic">
-//                         All rows are valid – ready to upload!
-//                       </div>
-//                     )}
-//                   </div>
-//                 )}
-//               </div>
-
-//               <div className="p-6 border-t bg-gray-50 flex justify-end gap-5">
-//                 <button
-//                   onClick={() => {
-//                     setIsBulkModalOpen(false);
-//                     setBulkFile(null);
-//                     setValidationResults([]);
-//                     setAllRowsValid(false);
-//                     setValidationSummary({ total: 0, valid: 0, invalid: 0 });
-//                     setComponentCounts({ valid: 0, invalid: 0 });
-//                   }}
-//                   className="px-8 py-3 text-gray-700 hover:text-black font-medium text-lg"
-//                 >
-//                   Cancel
-//                 </button>
-//                 <button
-//                   onClick={handleBulkUpload}
-//                   disabled={bulkUploading || !allRowsValid || !bulkFile}
-//                   className={`min-w-[220px] py-3 rounded-xl font-bold text-lg flex items-center justify-center gap-3 shadow-lg transition ${
-//                     allRowsValid && bulkFile && !bulkUploading
-//                       ? 'bg-green-600 hover:bg-green-700 text-white cursor-pointer'
-//                       : 'bg-gray-400 text-white cursor-not-allowed opacity-75'
-//                   }`}
-//                 >
-//                   {bulkUploading && <Loader2 className="animate-spin" size={24} />}
-//                   {allRowsValid ? 'Upload All Records' : 'Fix Errors First'}
-//                 </button>
+//                 />
 //               </div>
 //             </div>
 //           </div>
@@ -925,18 +564,6 @@
 // };
 
 // export default CreateRecords;
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -971,8 +598,10 @@ const CreateRecords = () => {
   const [filteredRecords, setFilteredRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+
   const [materialGrades, setMaterialGrades] = useState([]);
   const [limits, setLimits] = useState({});
+
   const [filters, setFilters] = useState({
     tc_no: '',
     traceability_no: '',
@@ -980,8 +609,10 @@ const CreateRecords = () => {
     size: '',
     material_grade: '',
   });
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
+
   const [formData, setFormData] = useState({
     tc_no: '',
     traceability_no: '',
@@ -990,13 +621,22 @@ const CreateRecords = () => {
     c: '', cr: '', ni: '', mo: '', mn: '', si: '', s: '', p: '', cu: '', fe: '', co: '',
     material_grade: '',
   });
+
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // State for bulk modal
+  const [traceabilityUniqueStatus, setTraceabilityUniqueStatus] = useState({
+    checking: false,
+    isUnique: true,
+    message: '',
+  });
+
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
   const chemicalComponents = ['c', 'cr', 'ni', 'mo', 'mn', 'si', 's', 'p', 'cu', 'fe', 'co'];
 
+  // ──────────────────────────────────────────────
+  // Fetch data on mount
+  // ──────────────────────────────────────────────
   useEffect(() => {
     fetchRecords();
     fetchMaterialGrades();
@@ -1006,6 +646,9 @@ const CreateRecords = () => {
     applyFilters();
   }, [records, filters]);
 
+  // ──────────────────────────────────────────────
+  // Material grade → limits
+  // ──────────────────────────────────────────────
   useEffect(() => {
     if (isModalOpen && formData.material_grade) {
       fetchLimitsForGrade(formData.material_grade);
@@ -1020,6 +663,61 @@ const CreateRecords = () => {
     validateChemicalFields();
   }, [formData, limits, isModalOpen]);
 
+  // ──────────────────────────────────────────────
+  // Traceability uniqueness check (with simple delay – no debounce library)
+  // ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!isModalOpen) return;
+
+    const value = formData.traceability_no?.trim() || '';
+
+    // Clear previous status when field becomes empty
+    if (!value) {
+      setTraceabilityUniqueStatus({ checking: false, isUnique: true, message: '' });
+      return;
+    }
+
+    // Set checking state
+    setTraceabilityUniqueStatus((prev) => ({ ...prev, checking: true }));
+
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ traceability_no: value });
+        if (editingRecord?.id) {
+          params.append('exclude_id', editingRecord.id);
+        }
+
+        const res = await fetch(`${API_BASE}/check-traceability-unique?${params}`);
+        const data = await res.json();
+
+        if (data.success) {
+          setTraceabilityUniqueStatus({
+            checking: false,
+            isUnique: data.isUnique,
+            message: data.isUnique ? '' : 'This Traceability No is already in use.',
+          });
+        } else {
+          setTraceabilityUniqueStatus({
+            checking: false,
+            isUnique: false,
+            message: 'Error checking uniqueness',
+          });
+        }
+      } catch (err) {
+        setTraceabilityUniqueStatus({
+          checking: false,
+          isUnique: false,
+          message: 'Network error',
+        });
+      }
+    }, 600); // ≈ debounce delay
+
+    return () => clearTimeout(timer);
+  }, [formData.traceability_no, isModalOpen, editingRecord?.id]);
+
+  // ──────────────────────────────────────────────
+  // Core fetch functions (unchanged)
+  // ──────────────────────────────────────────────
   const fetchMaterialGrades = async () => {
     try {
       const res = await fetch(`${API_BASE}/material-grades`);
@@ -1064,19 +762,29 @@ const CreateRecords = () => {
   const applyFilters = () => {
     let result = [...records];
     if (filters.tc_no.trim()) {
-      result = result.filter(r => r.tc_no?.toLowerCase().includes(filters.tc_no.toLowerCase().trim()));
+      result = result.filter((r) =>
+        r.tc_no?.toLowerCase().includes(filters.tc_no.toLowerCase().trim())
+      );
     }
     if (filters.traceability_no.trim()) {
-      result = result.filter(r => r.traceability_no?.toLowerCase().includes(filters.traceability_no.toLowerCase().trim()));
+      result = result.filter((r) =>
+        r.traceability_no?.toLowerCase().includes(filters.traceability_no.toLowerCase().trim())
+      );
     }
     if (filters.heat_no.trim()) {
-      result = result.filter(r => r.heat_no?.toLowerCase().includes(filters.heat_no.toLowerCase().trim()));
+      result = result.filter((r) =>
+        r.heat_no?.toLowerCase().includes(filters.heat_no.toLowerCase().trim())
+      );
     }
     if (filters.size.trim()) {
-      result = result.filter(r => r.size?.toLowerCase().includes(filters.size.toLowerCase().trim()));
+      result = result.filter((r) =>
+        r.size?.toLowerCase().includes(filters.size.toLowerCase().trim())
+      );
     }
     if (filters.material_grade.trim()) {
-      result = result.filter(r => r.material_grade?.toLowerCase().includes(filters.material_grade.toLowerCase().trim()));
+      result = result.filter((r) =>
+        r.material_grade?.toLowerCase().includes(filters.material_grade.toLowerCase().trim())
+      );
     }
     setFilteredRecords(result);
   };
@@ -1091,6 +799,9 @@ const CreateRecords = () => {
     });
   };
 
+  // ──────────────────────────────────────────────
+  // Modal control
+  // ──────────────────────────────────────────────
   const openModal = (record = null) => {
     if (record) {
       setEditingRecord(record);
@@ -1107,6 +818,7 @@ const CreateRecords = () => {
       });
       setLimits({});
       setFieldErrors({});
+      setTraceabilityUniqueStatus({ checking: false, isUnique: true, message: '' });
     }
     setIsModalOpen(true);
   };
@@ -1115,6 +827,7 @@ const CreateRecords = () => {
     setIsModalOpen(false);
     setEditingRecord(null);
     setFieldErrors({});
+    setTraceabilityUniqueStatus({ checking: false, isUnique: true, message: '' });
   };
 
   const validateChemicalFields = () => {
@@ -1123,6 +836,7 @@ const CreateRecords = () => {
       const val = formData[field] ? parseFloat(formData[field]) : null;
       const min = limits[`${field}_min`] ? parseFloat(limits[`${field}_min`]) : null;
       const max = limits[`${field}_max`] ? parseFloat(limits[`${field}_max`]) : null;
+
       if (val !== null && min !== null && max !== null && (val < min || val > max)) {
         errors[field] = `Must be between ${min} – ${max}`;
       }
@@ -1131,28 +845,40 @@ const CreateRecords = () => {
     return Object.keys(errors).length === 0;
   };
 
+  const isFormValid = () => {
+    const required = ['tc_no', 'heat_no', 'size', 'material_grade'];
+    const allRequiredFilled = required.every((key) => formData[key]?.trim());
+
+    const noChemicalErrors = Object.keys(fieldErrors).length === 0;
+    const traceabilityOk =
+      traceabilityUniqueStatus.isUnique && !traceabilityUniqueStatus.checking;
+
+    return allRequiredFilled && noChemicalErrors && traceabilityOk;
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!formData.tc_no?.trim() || !formData.heat_no?.trim() || !formData.size?.trim() || !formData.material_grade?.trim()) {
-      setMessage({ text: 'TC No, Heat No, Size and Material Grade are required', type: 'error' });
+
+    if (!isFormValid()) {
+      setMessage({ text: 'Please correct the errors in the form', type: 'error' });
       return;
     }
-    if (!validateChemicalFields()) {
-      setMessage({ text: 'Some chemical composition values are out of range', type: 'error' });
-      return;
-    }
+
     setLoading(true);
     try {
       const url = editingRecord
         ? `${API_BASE}/records/${editingRecord.id}`
         : `${API_BASE}/records`;
       const method = editingRecord ? 'PUT' : 'POST';
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
+
       const data = await res.json();
+
       if (res.ok && data.success) {
         setMessage({
           text: `Record ${editingRecord ? 'Updated' : 'Created'} Successfully`,
@@ -1202,17 +928,20 @@ const CreateRecords = () => {
     }
   };
 
-  const gradeOptions = materialGrades.map(grade => ({
+  const gradeOptions = materialGrades.map((grade) => ({
     value: grade.id,
-    label: grade.material_grade
+    label: grade.material_grade,
   }));
 
-  const selectedGrade = gradeOptions.find(opt => opt.label === formData.material_grade) || null;
+  const selectedGrade = gradeOptions.find((opt) => opt.label === formData.material_grade) || null;
 
+  // ──────────────────────────────────────────────
+  // Render
+  // ──────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-4 md:p-10">
       <div className="max-w-7xl mx-auto">
-        {/* Main Header */}
+        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-10 border-b-2 border-gray-800 pb-8 gap-6">
           <div className="text-center md:text-left">
             <h1 className="text-4xl font-extrabold tracking-tight text-black">Test Certificate Records</h1>
@@ -1233,16 +962,20 @@ const CreateRecords = () => {
           </div>
         </div>
 
-        {/* Global Message */}
+        {/* Global message */}
         {message.text && (
-          <div className={`mb-6 p-4 border-l-4 font-medium rounded-r-lg ${
-            message.type === 'success' ? 'bg-green-50 border-green-600 text-green-800' : 'bg-red-50 border-red-600 text-red-800'
-          }`}>
+          <div
+            className={`mb-6 p-4 border-l-4 font-medium rounded-r-lg ${
+              message.type === 'success'
+                ? 'bg-green-50 border-green-600 text-green-800'
+                : 'bg-red-50 border-red-600 text-red-800'
+            }`}
+          >
             {message.text}
           </div>
         )}
 
-        {/* Filter Section */}
+        {/* Filters */}
         <div className="mb-8 bg-white p-6 rounded-xl border shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 text-gray-800">
@@ -1257,7 +990,7 @@ const CreateRecords = () => {
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {['tc_no', 'traceability_no', 'heat_no', 'size', 'material_grade'].map(key => (
+            {['tc_no', 'traceability_no', 'heat_no', 'size', 'material_grade'].map((key) => (
               <div key={key} className="relative">
                 <input
                   name={key}
@@ -1266,13 +999,16 @@ const CreateRecords = () => {
                   placeholder={`Filter ${key.replace('_', ' ').toUpperCase()}`}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black cursor-text"
                 />
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                />
               </div>
             ))}
           </div>
         </div>
 
-        {/* Records Table */}
+        {/* Table */}
         <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1600px] text-left border-collapse">
@@ -1283,70 +1019,84 @@ const CreateRecords = () => {
                   <th className="py-4 px-6 font-bold uppercase text-sm text-gray-700">Heat No.</th>
                   <th className="py-4 px-6 font-bold uppercase text-sm text-gray-700">Size</th>
                   <th className="py-4 px-6 font-bold uppercase text-sm text-gray-700">Grade</th>
-                  <th className="py-4 px-6 text-center font-bold uppercase text-sm text-gray-700">Chemical Composition (%)</th>
-                  <th className="py-4 px-6 text-center font-bold uppercase text-sm text-gray-700">Actions</th>
+                  <th className="py-4 px-6 text-center font-bold uppercase text-sm text-gray-700">
+                    Chemical Composition (%)
+                  </th>
+                  <th className="py-4 px-6 text-center font-bold uppercase text-sm text-gray-700">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {loading ? (
-                  <tr><td colSpan={7} className="py-20 text-center"><Loader2 className="animate-spin mx-auto" size={32} /></td></tr>
-                ) : filteredRecords.length === 0 ? (
-                  <tr><td colSpan={7} className="py-20 text-center text-gray-500">
-                    {records.length === 0 ? "No records yet. Add some." : "No matching records found."}
-                  </td></tr>
-                ) : filteredRecords.map(r => (
-                  <tr key={r.id} className="hover:bg-gray-50">
-                    <td className="py-4 px-6 font-medium">{r.tc_no || '-'}</td>
-                    <td className="py-4 px-6">{r.traceability_no || '-'}</td>
-                    <td className="py-4 px-6">{r.heat_no || '-'}</td>
-                    <td className="py-4 px-6">{r.size || '-'}</td>
-                    <td className="py-4 px-6 font-medium">{r.material_grade || '-'}</td>
-                    <td className="py-4 px-6">
-                      <div className="space-y-2 text-xs font-mono">
-                        <div className="grid grid-cols-4 gap-3 bg-gray-50 p-3 rounded border">
-                          <div><b>C:</b> {r.c ?? '0.0000'}</div>
-                          <div><b>Cr:</b> {r.cr ?? '0.0000'}</div>
-                          <div><b>Ni:</b> {r.ni ?? '0.0000'}</div>
-                          <div><b>Mo:</b> {r.mo ?? '0.0000'}</div>
-                        </div>
-                        <div className="grid grid-cols-4 gap-3 bg-gray-50 p-3 rounded border">
-                          <div><b>Mn:</b> {r.mn ?? '0.0000'}</div>
-                          <div><b>Si:</b> {r.si ?? '0.0000'}</div>
-                          <div><b>S:</b> {r.s ?? '0.0000'}</div>
-                          <div><b>P:</b> {r.p ?? '0.0000'}</div>
-                        </div>
-                        <div className="grid grid-cols-4 gap-3 bg-gray-50 p-3 rounded border">
-                          <div><b>Cu:</b> {r.cu ?? '0.0000'}</div>
-                          <div><b>Fe:</b> {r.fe ?? '0.0000'}</div>
-                          <div><b>Co:</b> {r.co ?? '0.0000'}</div>
-                          <div className="opacity-0">-</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex justify-center gap-3">
-                        <button
-                          onClick={() => openModal(r)}
-                          className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-bold cursor-pointer"
-                        >
-                          EDIT
-                        </button>
-                        <button
-                          onClick={() => handleDelete(r.id)}
-                          className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold cursor-pointer"
-                        >
-                          DELETE
-                        </button>
-                      </div>
+                  <tr>
+                    <td colSpan={7} className="py-20 text-center">
+                      <Loader2 className="animate-spin mx-auto" size={32} />
                     </td>
                   </tr>
-                ))}
+                ) : filteredRecords.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-20 text-center text-gray-500">
+                      {records.length === 0 ? 'No records yet. Add some.' : 'No matching records found.'}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRecords.map((r) => (
+                    <tr key={r.id} className="hover:bg-gray-50">
+                      <td className="py-4 px-6 font-medium">{r.tc_no || '-'}</td>
+                      <td className="py-4 px-6">{r.traceability_no || '-'}</td>
+                      <td className="py-4 px-6">{r.heat_no || '-'}</td>
+                      <td className="py-4 px-6">{r.size || '-'}</td>
+                      <td className="py-4 px-6 font-medium">{r.material_grade || '-'}</td>
+                      <td className="py-4 px-6">
+                        <div className="space-y-2 text-xs font-mono">
+                          <div className="grid grid-cols-4 gap-3 bg-gray-50 p-3 rounded border">
+                            <div><b>C:</b> {r.c ?? '0.0000'}</div>
+                            <div><b>Cr:</b> {r.cr ?? '0.0000'}</div>
+                            <div><b>Ni:</b> {r.ni ?? '0.0000'}</div>
+                            <div><b>Mo:</b> {r.mo ?? '0.0000'}</div>
+                          </div>
+                          <div className="grid grid-cols-4 gap-3 bg-gray-50 p-3 rounded border">
+                            <div><b>Mn:</b> {r.mn ?? '0.0000'}</div>
+                            <div><b>Si:</b> {r.si ?? '0.0000'}</div>
+                            <div><b>S:</b> {r.s ?? '0.0000'}</div>
+                            <div><b>P:</b> {r.p ?? '0.0000'}</div>
+                          </div>
+                          <div className="grid grid-cols-4 gap-3 bg-gray-50 p-3 rounded border">
+                            <div><b>Cu:</b> {r.cu ?? '0.0000'}</div>
+                            <div><b>Fe:</b> {r.fe ?? '0.0000'}</div>
+                            <div><b>Co:</b> {r.co ?? '0.0000'}</div>
+                            <div className="opacity-0">-</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex justify-center gap-3">
+                          <button
+                            onClick={() => openModal(r)}
+                            className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-bold cursor-pointer"
+                          >
+                            EDIT
+                          </button>
+                          <button
+                            onClick={() => handleDelete(r.id)}
+                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-bold cursor-pointer"
+                          >
+                            DELETE
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Single Record Modal */}
+        {/* ────────────────────────────────────────────── */}
+        {/* Add/Edit Modal */}
+        {/* ────────────────────────────────────────────── */}
         {isModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col border border-gray-200">
@@ -1361,9 +1111,10 @@ const CreateRecords = () => {
                   <X size={28} className="text-gray-700 hover:text-black" />
                 </button>
               </div>
+
               <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6">
-                {/* ... rest of single record form remains unchanged ... */}
                 <div className="space-y-7">
+                  {/* Material Grade */}
                   <div className="bg-gray-50 p-5 rounded-xl border">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Material Grade <span className="text-red-600">*</span>
@@ -1378,6 +1129,7 @@ const CreateRecords = () => {
                     />
                   </div>
 
+                  {/* TC No + Traceability No */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1392,6 +1144,7 @@ const CreateRecords = () => {
                         required
                       />
                     </div>
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Traceability No.
@@ -1402,12 +1155,25 @@ const CreateRecords = () => {
                         value={formData.traceability_no || ''}
                         onChange={handleInputChange}
                         maxLength={50}
-                        placeholder="Optional"
-                        className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="Must be unique"
+                        className={`w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-500 transition-colors ${
+                          traceabilityUniqueStatus.message
+                            ? 'border-red-500 bg-red-50'
+                            : 'border-gray-300'
+                        }`}
                       />
+                      {traceabilityUniqueStatus.checking && (
+                        <p className="text-xs text-gray-500 mt-1">Checking...</p>
+                      )}
+                      {traceabilityUniqueStatus.message && (
+                        <p className="text-xs text-red-600 font-medium mt-1">
+                          {traceabilityUniqueStatus.message}
+                        </p>
+                      )}
                     </div>
                   </div>
 
+                  {/* Heat No + Size */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1437,6 +1203,7 @@ const CreateRecords = () => {
                     </div>
                   </div>
 
+                  {/* Chemical Composition */}
                   <div className="bg-gray-50 p-6 rounded-xl border">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4">
                       Chemical Composition (%)
@@ -1458,7 +1225,7 @@ const CreateRecords = () => {
                               onChange={handleInputChange}
                               placeholder={
                                 limits[`${elem}_min`] && limits[`${elem}_max`]
-                                  ? `${limits[`${elem}_min`]} – ${limits[`${elem}_max`]}` 
+                                  ? `${limits[`${elem}_min`]} – ${limits[`${elem}_max`]}`
                                   : '—'
                               }
                               className={`w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${
@@ -1466,9 +1233,7 @@ const CreateRecords = () => {
                               }`}
                             />
                             {error && (
-                              <p className="text-xs text-red-600 font-medium mt-1">
-                                {error}
-                              </p>
+                              <p className="text-xs text-red-600 font-medium mt-1">{error}</p>
                             )}
                           </div>
                         );
@@ -1487,8 +1252,12 @@ const CreateRecords = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="px-8 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2 min-w-[160px]"
+                    disabled={loading || !isFormValid()}
+                    className={`px-8 py-3 text-white rounded-lg font-medium flex items-center justify-center gap-2 min-w-[160px] ${
+                      isFormValid() && !loading
+                        ? 'bg-indigo-600 hover:bg-indigo-700'
+                        : 'bg-gray-400 cursor-not-allowed'
+                    }`}
                   >
                     {loading && <Loader2 className="animate-spin" size={18} />}
                     {editingRecord ? 'Update Record' : 'Save Record'}
@@ -1499,19 +1268,15 @@ const CreateRecords = () => {
           </div>
         )}
 
-        {/* Bulk Upload Modal */}
+        {/* Bulk Modal */}
         {isBulkModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white w-full max-w-6xl max-h-[96vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
-     
-
-              {/* Bulk content – no extra header */}
               <div className="flex-1 overflow-y-auto">
                 <CreateBulkRecords
                   onClose={() => setIsBulkModalOpen(false)}
                   onRecordsAdded={() => {
-                    fetchRecords(); // refresh main table after successful bulk upload
-                    // Modal stays open – user closes manually with X
+                    fetchRecords();
                   }}
                 />
               </div>
