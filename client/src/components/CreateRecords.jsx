@@ -4,7 +4,7 @@
 // import Select from 'react-select';
 // import CreateBulkRecords from './CreateBulkRecords';
 
-// const API_BASE = 'http://103.118.158.113.188:5000/api/sheet';
+// const API_BASE = 'http://103.118.158.188:5000/api/sheet';
 
 // const CreateRecords = () => {
 //   const [records, setRecords] = useState([]);
@@ -591,7 +591,7 @@ import { Plus, X, Loader2, RotateCcw, Search, Upload } from 'lucide-react';
 import Select from 'react-select';
 import CreateBulkRecords from './CreateBulkRecords';
 
-const API_BASE = 'http://103.118.158.113.188:5000/api/sheet';
+const API_BASE = 'http://103.118.158.188:5000/api/sheet';
 
 const CreateRecords = () => {
   const [records, setRecords] = useState([]);

@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, X, Loader2, Download } from 'lucide-react';
 
-const API_BASE = 'http://103.118.158.113.188:5000/api/sheet';
+const API_BASE = 'http://103.118.158.188:5000/api/sheet';
 
 const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) => {
   const [bulkFile, setBulkFile] = useState(null);
