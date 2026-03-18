@@ -26,7 +26,7 @@
 
 //   const fetchNextCertNumber = async () => {
 //     try {
-//       const res = await fetch('http://localhost:5000/api/sheet/next-cert-number');
+//       const res = await fetch('http://103.118.158.113.188:5000/api/sheet/next-cert-number');
 //       const json = await res.json();
 //       if (json.success && json.nextCertNo) {
 //         setCertNo(json.nextCertNo);
@@ -171,7 +171,7 @@
 //       const params = new URLSearchParams();
 //       traceabilityList.forEach(t => params.append('traceability_nos', t));
 
-//       const res = await fetch(`http://localhost:5000/api/sheet/records/by-traceabilities?${params.toString()}`);
+//       const res = await fetch(`http://103.118.158.113.188:5000/api/sheet/records/by-traceabilities?${params.toString()}`);
 //       const json = await res.json();
 
 //       if (json.success && json.records?.length > 0) {
@@ -199,7 +199,7 @@
 //           if (item.tcNo?.trim()) {
 //             try {
 //               const tcRes = await fetch(
-//                 `http://localhost:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(item.tcNo.trim())}`
+//                 `http://103.118.158.113.188:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(item.tcNo.trim())}`
 //               );
 //               const tcJson = await tcRes.json();
 //               if (tcJson.success && tcJson.record) {
@@ -255,7 +255,7 @@
 //     }
 
 //     try {
-//       const res = await fetch(`http://localhost:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
+//       const res = await fetch(`http://103.118.158.113.188:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
 //       const json = await res.json();
 
 //       if (json.success && json.record) {
@@ -364,7 +364,7 @@
 //     };
 
 //     try {
-//       const response = await fetch('http://localhost:5000/api/sheet/create-certificate', {
+//       const response = await fetch('http://103.118.158.113.188:5000/api/sheet/create-certificate', {
 //         method: 'POST',
 //         headers: { 'Content-Type': 'application/json' },
 //         body: JSON.stringify(payload),
@@ -699,22 +699,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Save } from 'lucide-react';
@@ -744,7 +728,7 @@ const CreateNewSheet = () => {
 
   const fetchNextCertNumber = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/sheet/next-cert-number');
+      const res = await fetch('http://103.118.158.113.188:5000/api/sheet/next-cert-number');
       const json = await res.json();
       if (json.success && json.nextCertNo) {
         setCertNo(json.nextCertNo);
@@ -774,9 +758,11 @@ const CreateNewSheet = () => {
     return `${dd}-${month}-${yy}`;
   };
 
+  // ====================== EXTRACT DATA FROM EXCEL ======================
   const extractFromFirstSheet = (wb) => {
     const sheetName = wb.SheetNames[0];
     const ws = wb.Sheets[sheetName];
+
     const get = (ref) => {
       const cell = ws[ref];
       if (!cell) return null;
@@ -822,7 +808,10 @@ const CreateNewSheet = () => {
         const isNumeric = poLiValue !== null && !isNaN(parseFloat(poLiValue)) && isFinite(poLiValue);
         if (!isNumeric) continue;
 
-        const traceabilityRaw = jobColIndex >= 0 ? String(get(XLSX.utils.encode_cell({ r, c: jobColIndex })) || '').trim() : '';
+        const traceabilityRaw = jobColIndex >= 0 
+          ? String(get(XLSX.utils.encode_cell({ r, c: jobColIndex })) || '').trim() 
+          : '';
+
         const traceParts = traceabilityRaw.split('/').map(p => p.trim()).filter(Boolean);
 
         items.push({
@@ -835,7 +824,7 @@ const CreateNewSheet = () => {
           qty: qtyColIndex >= 0 ? String(get(XLSX.utils.encode_cell({ r, c: qtyColIndex })) || '').trim() : '',
           matlConfTo: '',
           workingPressure: null,
-          testPressure: null,
+          testPressure: null,           // Will be filled from size lookup only
         });
 
         for (let i = 1; i < traceParts.length; i++) {
@@ -857,27 +846,39 @@ const CreateNewSheet = () => {
     return { headers, items };
   };
 
+  // ====================== PROCESS UPLOADED FILE ======================
   const processFile = (file) => {
     if (!file) return;
     setFileName(file.name);
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const wb = XLSX.read(e.target.result, { type: 'array' });
         const parsedData = extractFromFirstSheet(wb);
 
+        console.log("=== ALL ITEM & SIZE FROM UPLOADED EXCEL ===");
+        console.table(
+          parsedData.items.map((item, index) => ({
+            Row: index + 1,
+            "PO L/I": item.poLi,
+            "ITEM & SIZE": item.itemSize || "(Empty)",
+            "Traceability": item.traceability || "-",
+          }))
+        );
+
         setMultiSheetData([parsedData]);
-        updateHydroTestMessages(parsedData.items);
         fetchAllTraceabilityData(parsedData);
-        fetchPressuresByItemSize(parsedData.items);   // New - for footer test pressure
+        fetchPressuresByItemSize(parsedData.items);   // ← This sets testPressure (Footer)
       } catch (err) {
         console.error('Error reading Excel:', err);
+        alert('Failed to read Excel file. Please check the format.');
       }
     };
     reader.readAsArrayBuffer(file);
   };
 
-  // ====================== NEW: Fetch Test Pressure using pressures/by-sizes API ======================
+  // ====================== FETCH TEST PRESSURE BASED ON ITEM & SIZE ONLY ======================
   const fetchPressuresByItemSize = async (items) => {
     const sizes = items.map(item => item.itemSize?.trim()).filter(Boolean);
     if (sizes.length === 0) return;
@@ -885,7 +886,7 @@ const CreateNewSheet = () => {
     setPressureLoading(true);
 
     try {
-      const res = await fetch('http://localhost:5000/api/sheet/pressures/by-sizes', {
+      const res = await fetch('http://103.118.158.113.188:5000/api/sheet/pressures/by-sizes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sizes }),
@@ -896,25 +897,23 @@ const CreateNewSheet = () => {
       if (json.success && json.pressures) {
         setMultiSheetData(prev => {
           if (!prev[0]) return prev;
-          const updatedItems = prev[0].items.map(item => {
-            const pressureData = json.pressures[item.itemSize?.trim()];
-            return {
-              ...item,
-              testPressure: pressureData?.test_pressure || null,
-            };
-          });
+          const updatedItems = prev[0].items.map(item => ({
+            ...item,
+            testPressure: json.pressures[item.itemSize?.trim()]?.test_pressure || null,
+          }));
 
           const newData = [...prev];
           newData[0] = { ...newData[0], items: updatedItems };
           return newData;
         });
 
+        // Update footer after pressure is set
         setTimeout(() => {
           setMultiSheetData(prev => {
             if (prev[0]?.items) updateHydroTestMessages(prev[0].items);
             return prev;
           });
-        }, 0);
+        }, 100);
       }
     } catch (err) {
       console.error('Size-based pressure fetch failed:', err);
@@ -923,7 +922,7 @@ const CreateNewSheet = () => {
     }
   };
 
-  // ====================== ORIGINAL Traceability Data Fetch (UNCHANGED) ======================
+  // ====================== FETCH TRACEABILITY DATA ======================
   const fetchAllTraceabilityData = async (parsedData) => {
     const traceabilityList = parsedData.items
       .map(item => item.traceability?.trim())
@@ -937,7 +936,7 @@ const CreateNewSheet = () => {
       const params = new URLSearchParams();
       traceabilityList.forEach(t => params.append('traceability_nos', t));
 
-      const res = await fetch(`http://localhost:5000/api/sheet/records/by-traceabilities?${params.toString()}`);
+      const res = await fetch(`http://103.118.158.113.188:5000/api/sheet/records/by-traceabilities?${params.toString()}`);
       const json = await res.json();
 
       if (json.success && json.records?.length > 0) {
@@ -945,54 +944,29 @@ const CreateNewSheet = () => {
           json.records.map(r => [r.traceability_no?.trim()?.toUpperCase() || '', r])
         );
 
-        let updatedItems = parsedData.items.map(item => {
-          const traceKey = item.traceability?.trim()?.toUpperCase();
-          if (!traceKey || !recordsMap.has(traceKey)) return item;
-
-          const r = recordsMap.get(traceKey);
-          return {
-            ...item,
-            tcNo: r.tc_no || item.tcNo || '',
-            rawMtlSize: r.size || '',
-            C: r.c || '', Cr: r.cr || '', Ni: r.ni || '', Mo: r.mo || '',
-            Mn: r.mn || '', Si: r.si || '', S: r.s || '', P: r.p || '',
-            Cu: r.cu || '', Fe: r.fe || '', Co: r.co || '',
-            matlConfTo: r.material_grade || '',
-          };
-        });
-
-        const tcNoPromises = updatedItems.map(async (item, index) => {
-          if (item.tcNo?.trim()) {
-            try {
-              const tcRes = await fetch(
-                `http://localhost:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(item.tcNo.trim())}`
-              );
-              const tcJson = await tcRes.json();
-              if (tcJson.success && tcJson.record) {
-                const r = tcJson.record;
-                updatedItems[index] = {
-                  ...updatedItems[index],
-                  workingPressure: r.working_pressure || null,
-                  // Do NOT override testPressure from size lookup
-                };
-              }
-            } catch (err) {
-              console.error(`Failed to fetch pressure for TC ${item.tcNo}:`, err);
-            }
-          }
-        });
-
-        await Promise.all(tcNoPromises);
-
         setMultiSheetData(prev => {
-          const newData = prev.length > 0 ? [...prev] : [{ ...parsedData }];
+          if (!prev[0]) return prev;
+          const updatedItems = prev[0].items.map(item => {
+            const traceKey = item.traceability?.trim()?.toUpperCase();
+            if (!traceKey || !recordsMap.has(traceKey)) return item;
+
+            const r = recordsMap.get(traceKey);
+            return {
+              ...item,
+              tcNo: r.tc_no || item.tcNo || '',
+              rawMtlSize: r.size || '',
+              C: r.c || '', Cr: r.cr || '', Ni: r.ni || '', Mo: r.mo || '',
+              Mn: r.mn || '', Si: r.si || '', S: r.s || '', P: r.p || '',
+              Cu: r.cu || '', Fe: r.fe || '', Co: r.co || '',
+              matlConfTo: r.material_grade || '',
+              // testPressure is NOT touched here
+            };
+          });
+
+          const newData = [...prev];
           newData[0] = { ...newData[0], items: updatedItems };
           return newData;
         });
-
-        setTimeout(() => {
-          if (multiSheetData[0]?.items) updateHydroTestMessages(updatedItems);
-        }, 0);
       }
     } catch (err) {
       console.error('Batch fetch failed:', err);
@@ -1001,52 +975,74 @@ const CreateNewSheet = () => {
     }
   };
 
+  // ====================== TC No CHANGE - PRESERVE testPressure ======================
   const handleTcNoChange = async (itemIndex, tcNoValue) => {
     const updatedData = [...multiSheetData];
-    const item = updatedData[0].items[itemIndex];
+    if (!updatedData[0]) return;
+
+    const items = updatedData[0].items;
+    const item = items[itemIndex];
+    const oldTestPressure = item.testPressure;   // ← CRITICAL: Preserve footer pressure
 
     item.tcNo = tcNoValue.trim();
 
     if (!tcNoValue.trim()) {
       Object.assign(item, {
-        rawMtlSize: '', C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', Cu: '', Fe: '', Co: '',
-        matlConfTo: '', workingPressure: null, testPressure: null,
+        rawMtlSize: '', 
+        C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', Cu: '', Fe: '', Co: '',
+        matlConfTo: '', 
+        workingPressure: null,
+        testPressure: oldTestPressure,   // Restore
       });
       setMultiSheetData(updatedData);
-      updateHydroTestMessages(updatedData[0].items);
+      updateHydroTestMessages(items);
       return;
     }
 
     try {
-      const res = await fetch(`http://localhost:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
+      const res = await fetch(`http://103.118.158.113.188:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
       const json = await res.json();
 
       if (json.success && json.record) {
         const r = json.record;
         Object.assign(item, {
           rawMtlSize: r.size || '',
-          C: r.c || '', Cr: r.cr || '', Ni: r.ni || '', Mo: r.mo || '',
-          Mn: r.mn || '', Si: r.si || '', S: r.s || '', P: r.p || '',
-          Cu: r.cu || '', Fe: r.fe || '', Co: r.co || '',
+          C: r.c || '', 
+          Cr: r.cr || '', 
+          Ni: r.ni || '', 
+          Mo: r.mo || '',
+          Mn: r.mn || '', 
+          Si: r.si || '', 
+          S: r.s || '', 
+          P: r.p || '',
+          Cu: r.cu || '', 
+          Fe: r.fe || '', 
+          Co: r.co || '',
           matlConfTo: r.material_grade || '',
           workingPressure: r.working_pressure || null,
-          // testPressure from size lookup is preserved (higher priority)
+          testPressure: oldTestPressure,        // ← Preserve testPressure (Footer)
         });
       } else {
         Object.assign(item, {
-          rawMtlSize: '', C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', Cu: '', Fe: '', Co: '',
-          matlConfTo: '', workingPressure: null, testPressure: null,
+          rawMtlSize: '', 
+          C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', Cu: '', Fe: '', Co: '',
+          matlConfTo: '', 
+          workingPressure: null,
+          testPressure: oldTestPressure,
         });
       }
 
       setMultiSheetData(updatedData);
-      updateHydroTestMessages(updatedData[0].items);
+      updateHydroTestMessages(items);
     } catch (err) {
       console.error('TC lookup failed:', err);
+      item.testPressure = oldTestPressure;   // Restore on error
+      setMultiSheetData(updatedData);
+      updateHydroTestMessages(items);
     }
   };
 
-  // ====================== Footer uses ONLY test_pressure from Size ======================
+  // ====================== UPDATE HYDRO TEST MESSAGES (Footer) ======================
   const updateHydroTestMessages = (items) => {
     if (!items?.length) {
       setHydroTestMessages([]);
@@ -1126,7 +1122,7 @@ const CreateNewSheet = () => {
     };
 
     try {
-      const response = await fetch('http://localhost:5000/api/sheet/create-certificate', {
+      const response = await fetch('http://103.118.158.113.188:5000/api/sheet/create-certificate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1366,7 +1362,7 @@ const CreateNewSheet = () => {
                   </tr>
                 ))}
 
-                {/* Hydro Test Messages - ONLY Test Pressure */}
+                {/* Hydro Test Messages */}
                 {hydroTestMessages.length > 0 && (
                   <tr>
                     <td colSpan="20" style={{ 

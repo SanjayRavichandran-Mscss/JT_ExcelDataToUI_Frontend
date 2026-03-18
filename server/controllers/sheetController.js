@@ -377,6 +377,7 @@ function parseSize(sizeStr) {
   return { value: null, unit: null };
 }
 
+// ====================== GET RECORD BY TC NO (Only fetch record data - NO pressure) ======================
 exports.getRecordByTcNo = async (req, res) => {
   try {
     const { tc_no } = req.query;
@@ -390,7 +391,6 @@ exports.getRecordByTcNo = async (req, res) => {
 
     const cleanedTcNo = tc_no.trim();
 
-    // ─── 1. Fetch main record ────────────────────────────────────────
     const [rows] = await db.query(
       `SELECT 
         id, tc_no, heat_no, size, 
@@ -412,164 +412,31 @@ exports.getRecordByTcNo = async (req, res) => {
 
     const record = rows[0];
 
-    // ─── 2. Extract and normalize size value for mathematical comparison ─────
-    let normalizedSize = null;
-    let originalSize = record.size;
-
-    if (originalSize && typeof originalSize === 'string') {
-      // Extract numeric value and unit from various formats
-      // Examples: "1/4"", "3/8" OD", "1/2"", "6 MM", "10K", "20", "25 MM"
-      const sizeStr = originalSize.trim();
-      
-      // Handle fraction formats (e.g., 1/4", 3/8")
-      if (sizeStr.includes('/')) {
-        const fractionMatch = sizeStr.match(/(\d+)\/(\d+)/);
-        if (fractionMatch) {
-          const numerator = parseFloat(fractionMatch[1]);
-          const denominator = parseFloat(fractionMatch[2]);
-          if (denominator !== 0) {
-            normalizedSize = numerator / denominator;
-          }
-        }
-      } 
-      // Handle decimal formats with or without units
-      else {
-        const decimalMatch = sizeStr.match(/(\d+(?:\.\d+)?)/);
-        if (decimalMatch) {
-          normalizedSize = parseFloat(decimalMatch[1]);
-        }
-      }
-      
-      // Handle special cases like "3K", "6K", "10K", etc.
-      const kMatch = sizeStr.match(/(\d+(?:\.\d+)?)\s*K/i);
-      if (kMatch) {
-        normalizedSize = parseFloat(kMatch[1]) * 1000;
-      }
-    }
-
-    let workingPressure = null;
-    let testPressure = null;
-    let matchedSize = null;
-
-    // ─── 3. Fetch all pressure records for mathematical comparison ──────────
-    if (normalizedSize !== null) {
-      try {
-        // Get all pressure records
-        const [allPressures] = await db.query(
-          `SELECT working_pressure, test_pressure, size FROM pressures`
-        );
-
-        // Function to normalize pressure size for comparison
-        const normalizePressureSize = (pressureSize) => {
-          if (!pressureSize || typeof pressureSize !== 'string') return null;
-          
-          const ps = pressureSize.trim();
-          
-          // Handle fraction formats in pressure table
-          if (ps.includes('/')) {
-            const fractionMatch = ps.match(/(\d+)\/(\d+)/);
-            if (fractionMatch) {
-              const numerator = parseFloat(fractionMatch[1]);
-              const denominator = parseFloat(fractionMatch[2]);
-              if (denominator !== 0) {
-                return numerator / denominator;
-              }
-            }
-          }
-          
-          // Handle K values (3K, 6K, 10K, 15K, 20K, 30K)
-          const kMatch = ps.match(/(\d+(?:\.\d+)?)\s*K/i);
-          if (kMatch) {
-            return parseFloat(kMatch[1]) * 1000;
-          }
-          
-          // Handle decimal values
-          const decimalMatch = ps.match(/(\d+(?:\.\d+)?)/);
-          if (decimalMatch) {
-            return parseFloat(decimalMatch[1]);
-          }
-          
-          return null;
-        };
-
-        // Compare with tolerance for floating point precision
-        const tolerance = 0.0001;
-        
-        for (const pressure of allPressures) {
-          const pressureNormValue = normalizePressureSize(pressure.size);
-          
-          if (pressureNormValue !== null) {
-            // Mathematical comparison with tolerance
-            if (Math.abs(normalizedSize - pressureNormValue) < tolerance) {
-              workingPressure = pressure.working_pressure;
-              testPressure = pressure.test_pressure;
-              matchedSize = pressure.size;
-              break;
-            }
-            
-            // Handle inch to mm conversion if needed
-            // Assuming if one is in inches and other in mm, we might need conversion
-            // Check if the original size has inch symbol and pressure size has MM or vice versa
-            if (originalSize.includes('"') && pressure.size.toUpperCase().includes('MM')) {
-              // Convert inches to mm (1 inch = 25.4 mm)
-              const inchToMm = normalizedSize * 25.4;
-              if (Math.abs(inchToMm - pressureNormValue) < tolerance) {
-                workingPressure = pressure.working_pressure;
-                testPressure = pressure.test_pressure;
-                matchedSize = pressure.size;
-                break;
-              }
-            } else if (originalSize.toUpperCase().includes('MM') && pressure.size.includes('"')) {
-              // Convert mm to inches
-              const mmToInch = normalizedSize / 25.4;
-              if (Math.abs(mmToInch - pressureNormValue) < tolerance) {
-                workingPressure = pressure.working_pressure;
-                testPressure = pressure.test_pressure;
-                matchedSize = pressure.size;
-                break;
-              }
-            }
-          }
-        }
-      } catch (pressureError) {
-        console.error('Error fetching pressures:', pressureError);
-        // Continue with null pressures
-      }
-    }
-
-    // ─── 4. If no match found with mathematical comparison, try direct string match ──
-    if (workingPressure === null && originalSize) {
-      try {
-        const [directMatch] = await db.query(
-          `SELECT working_pressure, test_pressure, size 
-           FROM pressures 
-           WHERE size = ? 
-           LIMIT 1`,
-          [originalSize.trim()]
-        );
-        
-        if (directMatch.length > 0) {
-          workingPressure = directMatch[0].working_pressure;
-          testPressure = directMatch[0].test_pressure;
-          matchedSize = directMatch[0].size;
-        }
-      } catch (directMatchError) {
-        console.error('Error in direct match:', directMatchError);
-      }
-    }
-
-    // ─── 5. Final response with detailed information ───────────────────────────
+    // Return ONLY record data - NO pressure calculation
     res.status(200).json({
       success: true,
       record: {
-        ...record,
-        normalized_value: normalizedSize,
-        matched_pressure_size: matchedSize || null,
-        working_pressure: workingPressure,
-        test_pressure: testPressure,
-        pressure_match_method: matchedSize ? (matchedSize === originalSize ? 'direct_match' : 'mathematical_match') : 'no_match'
+        id: record.id,
+        tc_no: record.tc_no,
+        heat_no: record.heat_no,
+        size: record.size,
+        c: record.c,
+        cr: record.cr,
+        ni: record.ni,
+        mo: record.mo,
+        mn: record.mn,
+        si: record.si,
+        s: record.s,
+        p: record.p,
+        cu: record.cu,
+        fe: record.fe,
+        co: record.co,
+        material_grade: record.material_grade,
+        created_at: record.created_at,
+        updated_at: record.updated_at
       }
     });
+
   } catch (error) {
     console.error('Error in getRecordByTcNo:', error);
     res.status(500).json({
@@ -1880,8 +1747,10 @@ exports.getRecordsByTraceabilityNos = async (req, res) => {
 
 
 
-
-// Add this new function to sheetController.js
+// ==================== PRESSURE LOOKUP BY ITEM & SIZE (Footer uses this) ====================
+// Updated with priority: K > OD > MM + detailed console logging
+// ==================== PRESSURE LOOKUP BY ITEM & SIZE (Footer uses this) ====================
+// Updated with clean console table logging: S.No | Raw Value | Extracted | Test Pressure
 exports.getPressuresBySizes = async (req, res) => {
   try {
     const { sizes } = req.body;
@@ -1894,218 +1763,180 @@ exports.getPressuresBySizes = async (req, res) => {
     }
 
     // Clean and deduplicate sizes
-    const uniqueSizes = [...new Set(sizes.filter(s => s && typeof s === 'string' && s.trim()))];
-    
+    const uniqueSizes = [...new Set(
+      sizes.filter(s => s && typeof s === 'string' && s.trim().length > 0)
+        .map(s => s.trim())
+    )];
+
     if (uniqueSizes.length === 0) {
-      return res.json({
-        success: true,
-        pressures: {}
-      });
+      return res.json({ success: true, pressures: {} });
     }
 
-    // Fetch all pressures from database
+    console.log("=== BACKEND RECEIVED SIZES ===");
+    console.table(uniqueSizes);
+
+    // Fetch all pressure records from DB
     const [allPressures] = await db.query(
       `SELECT size, working_pressure, test_pressure FROM pressures`
     );
 
-    // Function to extract size value with priority
-    const extractSizeValue = (sizeStr) => {
-      if (!sizeStr || typeof sizeStr !== 'string') return null;
-      
-      const cleaned = sizeStr.trim();
-      
-      // Priority 1: Extract K value (e.g., 3K, 6K, 10K, 15K, 20K, 30K)
+    // ====================== SIZE EXTRACTION WITH PRIORITY (K > OD > MM) ======================
+    const extractSizeValue = (rawStr) => {
+      if (!rawStr || typeof rawStr !== 'string') return null;
+
+      let cleaned = rawStr
+        .replace(/\r\n/g, ' ')
+        .replace(/\n/g, ' ')
+        .trim();
+
+      // Priority 1: K Rating (Highest)
       const kMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*K/i);
       if (kMatch) {
         return {
-          value: parseInt(kMatch[1], 10),
+          value: parseFloat(kMatch[1]),
           type: 'K',
-          original: cleaned
+          extracted: `${kMatch[1]}K`,
+          raw: rawStr
         };
       }
-      
-      // Priority 2: Extract OD/Inch value
-      // Pattern for fractions like 1/4", 3/8", 1/2"
+
+      // Priority 2: OD (Fraction or Decimal)
       const fractionMatch = cleaned.match(/(\d+)\/(\d+)(?:\s*"?\s*OD)?/i);
       if (fractionMatch) {
-        const numerator = parseInt(fractionMatch[1], 10);
-        const denominator = parseInt(fractionMatch[2], 10);
+        const val = parseInt(fractionMatch[1]) / parseInt(fractionMatch[2]);
         return {
-          value: numerator / denominator,
+          value: val,
           type: 'OD',
-          original: cleaned,
-          unit: 'inch'
+          extracted: `${fractionMatch[1]}/${fractionMatch[2]}" OD`,
+          raw: rawStr
         };
       }
-      
-      // Pattern for decimal inches like 1", 0.75"
-      const decimalInchMatch = cleaned.match(/(\d+(?:\.\d+)?)(?:\s*"?\s*OD)?/i);
-      if (decimalInchMatch) {
+
+      const decimalODMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*"?\s*OD?/i);
+      if (decimalODMatch) {
         return {
-          value: parseFloat(decimalInchMatch[1]),
+          value: parseFloat(decimalODMatch[1]),
           type: 'OD',
-          original: cleaned,
-          unit: 'inch'
+          extracted: `${decimalODMatch[1]}" OD`,
+          raw: rawStr
         };
       }
-      
-      // Priority 3: Extract MM value
-      const mmMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*MM/i);
+
+      // Priority 3: MM (Lowest)
+      const mmMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*MM?/i);
       if (mmMatch) {
         return {
           value: parseFloat(mmMatch[1]),
           type: 'MM',
-          original: cleaned,
-          unit: 'mm'
+          extracted: `${mmMatch[1]} MM`,
+          raw: rawStr
         };
       }
-      
+
       return null;
     };
 
-    // Function to normalize pressure size for comparison
+    // ====================== NORMALIZE DB SIZE ======================
     const normalizePressureSize = (pressureSize) => {
       if (!pressureSize || typeof pressureSize !== 'string') return null;
-      
       const ps = pressureSize.trim();
-      
-      // Handle K values in pressure table
+
       const kMatch = ps.match(/(\d+(?:\.\d+)?)\s*K/i);
-      if (kMatch) {
-        return {
-          value: parseInt(kMatch[1], 10),
-          type: 'K',
-          original: ps
-        };
-      }
-      
-      // Handle fraction formats in pressure table
+      if (kMatch) return { value: parseFloat(kMatch[1]), type: 'K' };
+
       const fractionMatch = ps.match(/(\d+)\/(\d+)(?:\s*OD)?/i);
-      if (fractionMatch) {
-        const numerator = parseInt(fractionMatch[1], 10);
-        const denominator = parseInt(fractionMatch[2], 10);
-        return {
-          value: numerator / denominator,
-          type: 'OD',
-          original: ps,
-          unit: 'inch'
-        };
-      }
-      
-      // Handle decimal formats
+      if (fractionMatch) return { value: parseInt(fractionMatch[1])/parseInt(fractionMatch[2]), type: 'OD' };
+
       const decimalMatch = ps.match(/(\d+(?:\.\d+)?)(?:\s*OD)?/i);
-      if (decimalMatch) {
-        // Check if it's likely an OD value
-        if (ps.includes('OD') || ps.includes('"')) {
-          return {
-            value: parseFloat(decimalMatch[1]),
-            type: 'OD',
-            original: ps,
-            unit: 'inch'
+      if (decimalMatch) return { value: parseFloat(decimalMatch[1]), type: 'OD' };
+
+      const mmMatch = ps.match(/(\d+(?:\.\d+)?)\s*MM?/i);
+      if (mmMatch) return { value: parseFloat(mmMatch[1]), type: 'MM' };
+
+      return null;
+    };
+
+    // ====================== MATCHING LOGIC ======================
+    const pressureMap = {};
+    const tolerance = 0.001;
+    const logData = [];   // For neat console table
+
+    for (let i = 0; i < uniqueSizes.length; i++) {
+      const sizeStr = uniqueSizes[i];
+      const extracted = extractSizeValue(sizeStr);
+
+      let testPressure = null;
+      let matchedDbSize = null;
+      let status = "No Match";
+
+      if (extracted) {
+        let bestMatch = null;
+        let bestPriority = 999;
+
+        for (const p of allPressures) {
+          const norm = normalizePressureSize(p.size);
+          if (!norm) continue;
+
+          let isMatch = false;
+          let currentPriority = 999;
+
+          if (extracted.type === norm.type) {
+            if (Math.abs(extracted.value - norm.value) < tolerance) {
+              isMatch = true;
+              currentPriority = extracted.type === 'K' ? 1 : extracted.type === 'OD' ? 2 : 3;
+            }
+          } 
+          else if (extracted.type === 'OD' && norm.type === 'MM') {
+            if (Math.abs(extracted.value * 25.4 - norm.value) < tolerance) {
+              isMatch = true;
+              currentPriority = 4;
+            }
+          } 
+          else if (extracted.type === 'MM' && norm.type === 'OD') {
+            if (Math.abs(extracted.value / 25.4 - norm.value) < tolerance) {
+              isMatch = true;
+              currentPriority = 4;
+            }
+          }
+
+          if (isMatch && currentPriority < bestPriority) {
+            bestMatch = p;
+            bestPriority = currentPriority;
+          }
+        }
+
+        if (bestMatch) {
+          testPressure = bestMatch.test_pressure;
+          matchedDbSize = bestMatch.size;
+          status = "Matched";
+          pressureMap[sizeStr] = {
+            size: bestMatch.size,
+            working_pressure: bestMatch.working_pressure,
+            test_pressure: bestMatch.test_pressure
           };
         }
       }
-      
-      // Handle MM values
-      const mmMatch = ps.match(/(\d+(?:\.\d+)?)\s*MM/i);
-      if (mmMatch) {
-        return {
-          value: parseFloat(mmMatch[1]),
-          type: 'MM',
-          original: ps,
-          unit: 'mm'
-        };
-      }
-      
-      return null;
-    };
 
-    // Process each size and find matching pressure
-    const pressureMap = {};
-    const tolerance = 0.001; // For floating point comparison
-
-    for (const size of uniqueSizes) {
-      const extracted = extractSizeValue(size);
-      if (!extracted) continue;
-
-      let bestMatch = null;
-      let bestMatchPriority = 999;
-
-      for (const pressure of allPressures) {
-        const normalized = normalizePressureSize(pressure.size);
-        if (!normalized) continue;
-
-        // Check if types match (K, OD, MM)
-        if (extracted.type === normalized.type) {
-          // Direct type match - highest priority
-          if (extracted.type === 'K') {
-            // K values should match exactly
-            if (extracted.value === normalized.value) {
-              const priority = 1; // K has highest priority
-              if (priority < bestMatchPriority) {
-                bestMatch = pressure;
-                bestMatchPriority = priority;
-                break; // K match found, no need to continue
-              }
-            }
-          } else if (extracted.type === 'OD') {
-            // Compare inch values
-            if (Math.abs(extracted.value - normalized.value) < tolerance) {
-              const priority = 2; // OD has second priority
-              if (priority < bestMatchPriority) {
-                bestMatch = pressure;
-                bestMatchPriority = priority;
-              }
-            }
-          } else if (extracted.type === 'MM') {
-            // Compare mm values directly
-            if (Math.abs(extracted.value - normalized.value) < tolerance) {
-              const priority = 3; // MM has lowest priority
-              if (priority < bestMatchPriority) {
-                bestMatch = pressure;
-                bestMatchPriority = priority;
-              }
-            }
-          }
-        } else {
-          // Cross-unit comparison (e.g., inch to mm)
-          // This is a fallback if no direct type match found
-          if (extracted.type === 'OD' && normalized.type === 'MM') {
-            // Convert extracted inch to mm
-            const inchToMm = extracted.value * 25.4;
-            if (Math.abs(inchToMm - normalized.value) < tolerance) {
-              const priority = 4; // Cross-unit has lowest priority
-              if (priority < bestMatchPriority) {
-                bestMatch = pressure;
-                bestMatchPriority = priority;
-              }
-            }
-          } else if (extracted.type === 'MM' && normalized.type === 'OD') {
-            // Convert extracted mm to inch
-            const mmToInch = extracted.value / 25.4;
-            if (Math.abs(mmToInch - normalized.value) < tolerance) {
-              const priority = 4;
-              if (priority < bestMatchPriority) {
-                bestMatch = pressure;
-                bestMatchPriority = priority;
-              }
-            }
-          }
-        }
-      }
-
-      if (bestMatch) {
-        pressureMap[size] = {
-          size: bestMatch.size,
-          working_pressure: bestMatch.working_pressure,
-          test_pressure: bestMatch.test_pressure
-        };
-      }
+      logData.push({
+        "S.No": i + 1,
+        "Raw Value": sizeStr.length > 60 ? sizeStr.substring(0, 57) + "..." : sizeStr,
+        "Extracted": extracted ? `${extracted.extracted} (${extracted.type})` : "Not Detected",
+        "Test Pressure": testPressure ? `${testPressure} PSI` : "—",
+        "Status": status
+      });
     }
+
+    // ====================== NEAT CONSOLE TABLE ======================
+    console.log("\n=== FINAL SIZE EXTRACTION & MATCHING RESULT ===");
+    console.table(logData);
+
+    console.log(`\n=== SUMMARY: ${Object.keys(pressureMap).length}/${uniqueSizes.length} sizes successfully matched ===\n`);
 
     res.json({
       success: true,
-      pressures: pressureMap
+      pressures: pressureMap,
+      totalRequested: uniqueSizes.length,
+      matchedCount: Object.keys(pressureMap).length
     });
 
   } catch (error) {
