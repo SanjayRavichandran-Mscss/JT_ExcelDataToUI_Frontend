@@ -737,7 +737,7 @@ const formatItemSizeWithBracket = (itemSize) => {
       pageBreakAfter: 'auto',
     },
     table: { 
-      width: '100%', 
+      // width: '100%', 
       borderCollapse: 'collapse', 
       tableLayout: 'fixed',
       border: '0.5px solid #999',
@@ -828,7 +828,7 @@ const formatItemSizeWithBracket = (itemSize) => {
           <table style={styles.nestedTable}>
             <tbody>
               <tr>
-                <td style={{ ...styles.nestedCell, borderBottom: '0.5px solid #999', fontWeight: 'bold', width: '151.5px', ...styles.textRight, minHeight: '38px' }}>
+                <td style={{ ...styles.nestedCell, borderBottom: '0.5px solid #999', fontWeight: 'bold', width: '113px', ...styles.textRight, minHeight: '38px' }}>
                   CERT.NO.:
                 </td>
                 <td style={{ ...styles.nestedCell, borderBottom: '0.5px solid #999', minHeight: '38px', verticalAlign: 'middle' }}>
@@ -862,7 +862,7 @@ const formatItemSizeWithBracket = (itemSize) => {
         <td colSpan="2" style={{ ...styles.cell, ...styles.textLeft, padding: '9px 2px 10px 8px' }}>{displayValue(data.delivery_date)}</td>
       </tr>
       <tr style={styles.bold}>
-        <td rowSpan="2" style={{ ...styles.cell, width: '3.5%', padding: '8px 2px 4px 2px' }}>PO<br />L/1</td>
+        <td rowSpan="2" style={{ ...styles.cell, width: '3.5%', padding: '8px 2px 4px 2px' }}>PO<br />L/I</td>
         <td colSpan="3" rowSpan="2" style={{ ...styles.cell, width: '16%', padding: '8px 2px 4px 2px' }}>ITEM & SIZE</td>
         <td rowSpan="2" style={{ ...styles.cell, width: '7%', padding: '8px 2px 4px 2px' }}>RAW<br />MTL. SIZE</td>
         <td rowSpan="2" style={{ ...styles.cell, width: '6%', padding: '8px 2px 4px 2px' }}>T.C.NO.</td>
@@ -909,7 +909,7 @@ const formatItemSizeWithBracket = (itemSize) => {
   );
 
   // Calculate rows per page based on content height
-  const ROWS_PER_PAGE = 12;
+  const ROWS_PER_PAGE = 5;
   
   const pages = [];
   for (let i = 0; i < processedItems.length; i += ROWS_PER_PAGE) {

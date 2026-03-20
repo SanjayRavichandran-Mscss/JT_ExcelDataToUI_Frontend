@@ -9,8 +9,6 @@ import sign2 from './Assets/Signatures/sign2.jpeg';
 
 
 
-
-
 const CreateNewSheet = () => {
   const [multiSheetData, setMultiSheetData] = useState([]);
   const [fileName, setFileName] = useState('');
@@ -346,41 +344,96 @@ const CreateNewSheet = () => {
   };
 
   // ====================== UPDATE HYDRO TEST MESSAGES (Footer) ======================
-  const updateHydroTestMessages = (items) => {
-    if (!items?.length) {
-      setHydroTestMessages([]);
-      return;
-    }
+  // const updateHydroTestMessages = (items) => {
+  //   if (!items?.length) {
+  //     setHydroTestMessages([]);
+  //     return;
+  //   }
 
-    const pressureGroups = {};
+  //   const pressureGroups = {};
 
-    items
-      .filter((item) => item.poLi && item.testPressure)
-      .forEach((item) => {
-        const key = item.testPressure;
-        if (!pressureGroups[key]) {
-          pressureGroups[key] = { testPressure: item.testPressure, poLis: [] };
-        }
-        pressureGroups[key].poLis.push(item.poLi);
-      });
+  //   items
+  //     .filter((item) => item.poLi && item.testPressure)
+  //     .forEach((item) => {
+  //       const key = item.testPressure;
+  //       if (!pressureGroups[key]) {
+  //         pressureGroups[key] = { testPressure: item.testPressure, poLis: [] };
+  //       }
+  //       pressureGroups[key].poLis.push(item.poLi);
+  //     });
 
-    const messages = Object.values(pressureGroups).map((group) => {
-      const poLis = group.poLis.sort((a, b) => parseFloat(a) - parseFloat(b));
-      let poLiText = poLis.length === 1 
-        ? poLis[0] 
-        : poLis.every((n, i, arr) => i === 0 || Number(n) === Number(arr[i-1]) + 0.1)
-          ? `${poLis[0]} to ${poLis[poLis.length - 1]}`
-          : poLis.join(' & ');
+  //   const messages = Object.values(pressureGroups).map((group) => {
+  //     const poLis = group.poLis.sort((a, b) => parseFloat(a) - parseFloat(b));
+  //     let poLiText = poLis.length === 1 
+  //       ? poLis[0] 
+  //       : poLis.every((n, i, arr) => i === 0 || Number(n) === Number(arr[i-1]) + 0.1)
+  //         ? `${poLis[0]} to ${poLis[poLis.length - 1]}`
+  //         : poLis.join(' & ');
 
-      return {
-        full: `TEST: ABOVE FITTINGS (L/I: ${poLiText}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${group.testPressure} WITHOUT ANY LEAKAGE.`,
-        poLiPart: poLiText,
-        pressurePart: group.testPressure,
-      };
+  //     return {
+  //       full: `TEST: ABOVE FITTINGS (L/I: ${poLiText}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${group.testPressure} WITHOUT ANY LEAKAGE.`,
+  //       poLiPart: poLiText,
+  //       pressurePart: group.testPressure,
+  //     };
+  //   });
+
+  //   setHydroTestMessages(messages);
+  // };
+
+
+
+
+  // ====================== UPDATE HYDRO TEST MESSAGES (Footer) ======================
+const updateHydroTestMessages = (items) => {
+  if (!items?.length) {
+    setHydroTestMessages([]);
+    return;
+  }
+
+  const groups = {};
+
+  items
+    .filter((item) => item.poLi && item.testPressure)
+    .forEach((item) => {
+      const isValve = item.itemSize && item.itemSize.toLowerCase().includes('valve');
+
+      // 👇 KEY NOW INCLUDES TYPE (VALVE / FITTING)
+      const key = `${item.testPressure}_${isValve ? 'VALVE' : 'FITTING'}`;
+
+      if (!groups[key]) {
+        groups[key] = {
+          testPressure: item.testPressure,
+          poLis: [],
+          type: isValve ? 'VALVE' : 'FITTING',
+        };
+      }
+
+      groups[key].poLis.push(item.poLi);
     });
 
-    setHydroTestMessages(messages);
-  };
+  const messages = Object.values(groups).map((group) => {
+    const poLis = group.poLis.sort((a, b) => parseFloat(a) - parseFloat(b));
+
+    let poLiText = poLis.length === 1
+      ? poLis[0]
+      : poLis.every((n, i, arr) => i === 0 || Number(n) === Number(arr[i - 1]) + 0.1)
+        ? `${poLis[0]} to ${poLis[poLis.length - 1]}`
+        : poLis.join(' & ');
+
+    //  DIFFERENT MESSAGE BASED ON TYPE
+    const fullMessage = group.type === 'VALVE'
+      ? `TEST: ABOVE (L/I: ${poLiText}) VALVES ARE 100% HYDRO TESTED AT ${group.testPressure} WITHOUT ANY LEAKAGE.`
+      : `TEST: ABOVE FITTINGS (L/I: ${poLiText}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${group.testPressure} WITHOUT ANY LEAKAGE.`;
+
+    return {
+      full: fullMessage,
+      poLiPart: poLiText,
+      pressurePart: group.testPressure,
+    };
+  });
+
+  setHydroTestMessages(messages);
+};
 
 // Replace the handleHydroMessagePartChange function with this updated version
 const handleHydroMessagePartChange = (msgIndex, field, newValue) => {
@@ -462,14 +515,15 @@ const handleHydroMessagePartChange = (msgIndex, field, newValue) => {
     }
   };
 
-  const formatChemicalValue = (value) => {
-    if (value === undefined || value === null || value === '') return '---';
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return '---';
-    if (numValue === 0 || Math.abs(numValue) < 0.0001) return '-';
-    const formatted = numValue.toFixed(3);
-    return formatted.replace(/\.?0+$/, '');
-  };
+const formatChemicalValue = (value) => {
+  if (value === undefined || value === null || value === '') return '---';
+
+  const numValue = parseFloat(value);
+  if (isNaN(numValue)) return '---';
+
+  // Always show 3 decimal places (including 0 values)
+  return numValue.toFixed(3);
+};
 
   const displayValue = (value) => {
     if (value === undefined || value === null || value === '') return '—';
@@ -525,8 +579,9 @@ const formatItemSizeWithBracket = (itemSize) => {
   const styles = {
     reportContainer: { width: '1200px', margin: '0 auto', backgroundColor: 'white', fontFamily: 'Arial, sans-serif', fontSize: '11px', color: '#000' },
     page: { width: '1200px', minHeight: '780px', border: '2px solid #000', backgroundColor: 'white', boxSizing: 'border-box' },
-    table: { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
+    table: {  borderCollapse: 'collapse', tableLayout: 'fixed' },
     cell: { border: '1px solid #000', padding: '10px 4px', textAlign: 'center', verticalAlign: 'middle', wordWrap: 'break-word', fontFamily: 'Arial, sans-serif' },
+    chemicalcell: { border: '1px solid #000', padding: '10px',width: '2px', textAlign: 'center', verticalAlign: 'middle', wordWrap: 'break-word', fontFamily: 'Arial, sans-serif' },
     tracecell: { fontSize: '10px', border: '1px solid #000', padding: '4px 3px', textAlign: 'center', verticalAlign: 'middle', wordWrap: 'break-word' },
     bold: { fontWeight: 'bold' },
     textLeft: { textAlign: 'left', paddingLeft: '8px' },
@@ -623,7 +678,7 @@ const formatItemSizeWithBracket = (itemSize) => {
                     <table style={styles.nestedTable}>
                       <tbody>
                         <tr>
-                          <td style={{ ...styles.nestedCell, borderBottom: '1px solid #000', fontWeight: 'bold', borderLeft: 'none', textAlign: 'right', width: '171px' }}>
+                          <td style={{ ...styles.nestedCell, borderBottom: '1px solid #000', fontWeight: 'bold', borderLeft: 'none', textAlign: 'right', width: '165px' }}>
                             CERT.NO.:
                           </td>
                           <td style={{ ...styles.nestedCell, borderBottom: '1px solid #000', fontWeight: 'bold' }}>
@@ -665,13 +720,13 @@ const formatItemSizeWithBracket = (itemSize) => {
 
                 {/* Items Header */}
                 <tr style={styles.bold}>
-                  <td rowSpan='2' style={{ ...styles.cell, width: '38px' }}>PO<br />L/1</td>
+                  <td rowSpan='2' style={{ ...styles.cell, width: '38px' }}>PO<br />L/I</td>
                   <td colSpan="3" rowSpan="2" style={{ ...styles.cell, width: '200px' }}>ITEM & SIZE</td>
                   <td rowSpan="2" style={{ ...styles.cell, width: '82px' }}>RAW<br />MTL. SIZE</td>
                   <td rowSpan="2" style={{ ...styles.cell, width: '60px' }}>T.C.NO.</td>
-                  <td rowSpan="2" style={{ ...styles.tracecell, width: '81px', fontSize: '9px' }}>Traceability<br />no-</td>
-                  <td colSpan="11" style={{ ...styles.cell }}>CHEMICAL COMPOSITION %</td>
-                  <td rowSpan='2' style={{ ...styles.cell, width: '48px' }}>QTY<br />PCS</td>
+                  <td rowSpan="2" style={{ ...styles.tracecell, width: '81px' }}>Traceability<br />no-</td>
+                  <td colSpan="11" style={{ ...styles.chemicalcell }}>CHEMICAL COMPOSITION %</td>
+                  <td rowSpan='2' style={{ ...styles.cell, width: '38px' }}>QTY<br />PCS</td>
                   <td rowSpan='2' style={{ ...styles.cell, width: '126px' }}>MATL.<br />Conf.To</td>
                 </tr>
 
