@@ -289,14 +289,29 @@ const handleTestLineChange = (index, field, value) => {
 
   const clearFilter = () => setFilterText('');
 
+  // const formatChemicalValue = (value) => {
+  //   if (value === undefined || value === null || value === '') return '---';
+  //   const numValue = parseFloat(value);
+  //   if (isNaN(numValue)) return '---';
+  //   if (numValue === 0 || Math.abs(numValue) < 0.0001) return '-';
+  //   const formatted = numValue.toFixed(3);
+  //   return formatted.replace(/\.?0+$/, '');
+  // };
+
+
   const formatChemicalValue = (value) => {
-    if (value === undefined || value === null || value === '') return '---';
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return '---';
-    if (numValue === 0 || Math.abs(numValue) < 0.0001) return '-';
-    const formatted = numValue.toFixed(3);
-    return formatted.replace(/\.?0+$/, '');
-  };
+  if (value === undefined || value === null || value === '' || value === '---') 
+    return '---';
+
+  const numValue = parseFloat(value);
+  if (isNaN(numValue)) return '---';
+
+  // Special case for zero
+  if (Math.abs(numValue) < 0.0001) return '-';
+
+  // Force exactly 3 decimal places (this is what you want)
+  return numValue.toFixed(3);
+};
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center">
