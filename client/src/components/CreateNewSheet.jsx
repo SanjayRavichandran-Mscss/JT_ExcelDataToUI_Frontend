@@ -22,6 +22,8 @@ const CreateNewSheet = () => {
 
   const certificateRef = useRef(null);
   const fileInputRef = useRef(null);
+const [deliveryNoteExists, setDeliveryNoteExists] = useState(false);
+const [checkingDeliveryNote, setCheckingDeliveryNote] = useState(false);
 
   useEffect(() => {
     fetchNextCertNumber();
@@ -38,6 +40,13 @@ const CreateNewSheet = () => {
       console.error('Failed to fetch next certificate number:', err);
     }
   };
+
+  useEffect(() => {
+    const deliveryNote = multiSheetData[0]?.headers?.deliveryNoteNo;
+    if (deliveryNote) {
+      checkDeliveryNote(deliveryNote);
+    }
+  }, [multiSheetData]);
 
   const getTodayDate = () => {
     const today = new Date();
@@ -464,11 +473,17 @@ const handleHydroMessagePartChange = (msgIndex, field, newValue) => {
   });
 };
 
-  const handleSubmitCertificate = async () => {
-    if (multiSheetData.length === 0) return;
+const handleSubmitCertificate = async () => {
+  if (multiSheetData.length === 0) return;
+  if (deliveryNoteExists) {
+    alert("Delivery Note already exists! Cannot create duplicate.");
+    return;
+  }
     setSubmitLoading(true);
     const data = multiSheetData[0];
 
+
+    
     const payload = {
       cert_no: certNo,
       cert_date: todayDate,
@@ -514,6 +529,33 @@ const handleHydroMessagePartChange = (msgIndex, field, newValue) => {
       setSubmitLoading(false);
     }
   };
+
+  // Check Delivery Note Duplicate
+const checkDeliveryNote = async (deliveryNote) => {
+  if (!deliveryNote || deliveryNote.trim() === '' || deliveryNote === '-') {
+    setDeliveryNoteExists(false);
+    return;
+  }
+
+  setCheckingDeliveryNote(true);
+
+  try {
+    const res = await fetch('http://103.118.158.188:5000/api/sheet/check-delivery-note', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delivery_note_no: deliveryNote.trim() })
+    });
+
+    const result = await res.json();
+
+    setDeliveryNoteExists(result.exists || false);
+  } catch (err) {
+    console.error("Failed to check delivery note:", err);
+    setDeliveryNoteExists(false);
+  } finally {
+    setCheckingDeliveryNote(false);
+  }
+};
 
 const formatChemicalValue = (value) => {
   if (value === undefined || value === null || value === '') return '---';
@@ -610,11 +652,25 @@ const formatItemSizeWithBracket = (itemSize) => {
           </button>
 
           {multiSheetData.length > 0 && (
-            <button onClick={handleSubmitCertificate} disabled={submitLoading}
-              style={{ padding: '10px 25px', cursor: submitLoading ? 'not-allowed' : 'pointer', background: '#28a745', color: '#fff', borderRadius: '4px', border: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', opacity: submitLoading ? 0.6 : 1 }}>
-              <Save size={16} style={{ marginRight: '8px' }} />
-              {submitLoading ? 'Saving...' : 'Submit'}
-            </button>
+        <button 
+  onClick={handleSubmitCertificate} 
+  disabled={submitLoading || deliveryNoteExists || checkingDeliveryNote}
+  style={{ 
+    padding: '10px 25px', 
+    cursor: (submitLoading || deliveryNoteExists) ? 'not-allowed' : 'pointer', 
+    background: deliveryNoteExists ? '#dc3545' : '#28a745', 
+    color: '#fff', 
+    borderRadius: '4px', 
+    border: 'none', 
+    fontWeight: 'bold' 
+  }}
+>
+  {deliveryNoteExists 
+    ? 'Delivery Note Already Exists' 
+    : submitLoading 
+      ? 'Saving...' 
+      : 'Submit'}
+</button>
           )}
 
           {(batchLoading || pressureLoading) && (

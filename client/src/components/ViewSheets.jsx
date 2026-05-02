@@ -672,42 +672,101 @@ const CertificateLayout = React.forwardRef(({ data, formatChemicalValue }, ref) 
 
 
 
-  // Add this function inside the CertificateLayout component, before the return statement
 const formatItemSizeWithBracket = (itemSize) => {
   if (!itemSize || itemSize === '—') return '—';
+
+  const trimmed = itemSize.trim();
   
-  // Extract content within brackets
-  const bracketRegex = /\(([^)]+)\)/g;
-  const matches = [];
-  let match;
-  
-  while ((match = bracketRegex.exec(itemSize)) !== null) {
-    matches.push(match[1]);
-  }
-  
-  // If bracket content found, format it on a separate line
-  if (matches.length > 0) {
-    // Remove bracket content from main text and clean up
-    let mainText = itemSize.replace(/\s*\([^)]+\)\s*/g, '').trim();
-    
-    // If mainText is empty after removing brackets, use the bracket content as main
-    if (!mainText && matches.length > 0) {
-      return (
-        <>
-          {matches.join(', ')}
-        </>
-      );
-    }
-    
+  // Extract content inside brackets
+  const bracketMatch = trimmed.match(/\(([^)]+)\)/);
+  const bracketContent = bracketMatch ? bracketMatch[1].trim() : '';
+
+  // Main text without brackets
+  let mainText = trimmed.replace(/\s*\([^)]+\)\s*/g, '').trim();
+
+  if (bracketContent) {
     return (
-      <>
-        {mainText}<br />
-        <span style={{ fontSize: '8px', color: '#666' }}>({matches.join(', ')})</span>
-      </>
+      <div style={{ textAlign: 'center', lineHeight: '1.25' }}>
+        {mainText}
+        <br />
+        <span style={{ fontSize: '9.5px' }}>
+          ({bracketContent})
+        </span>
+      </div>
     );
   }
-  
-  return itemSize;
+
+  // If no bracket found
+  return (
+    <div style={{ textAlign: 'center' }}>
+      {trimmed}
+    </div>
+  );
+};
+
+// Add this function inside CertificateLayout component
+const formatRawMaterialSize = (value) => {
+  if (!value || value === '—' || value.trim() === '') return '—';
+
+  const trimmed = value.trim();
+
+  // Split into type and size part
+  // This regex separates the material type (words before first number or "x") 
+  const match = trimmed.match(/^([A-Za-z\s]+?)\s+(.+)$/);
+
+  if (match) {
+    const type = match[1].trim();   // e.g., "Round", "Flat Bar", "Square Bar", "Pipe"
+    const size = match[2].trim();   // e.g., "60.00 mm", "65 x 35 mm", "114.3 x 6.02 mm"
+
+    return (
+      <div style={{ textAlign: 'center', lineHeight: '1.25' }}>
+        {type}
+        <br />
+        <span style={{ 
+          fontSize: '8.3px', 
+          color: '#333', 
+          fontWeight: 'normal' 
+        }}>
+          {size}
+        </span>
+      </div>
+    );
+  }
+
+  // Fallback - if no split possible
+  return (
+    <div style={{ textAlign: 'center' }}>
+      {trimmed}
+    </div>
+  );
+};
+
+
+const formatMaterialGrade = (value) => {
+  if (!value || value === '—') return '—';
+
+  const trimmed = value.trim();
+
+  if (trimmed.includes('+')) {
+    const parts = trimmed.split('+').map(part => part.trim());
+    
+    return (
+      <div style={{ textAlign: 'center', lineHeight: '1.25' }}>
+        {parts[0]}
+        <br />
+        <span style={{ fontSize: '9.5px' }}>
+          + {parts.slice(1).join(' + ')}
+        </span>
+      </div>
+    );
+  }
+
+  // If no '+' found
+  return (
+    <div style={{ textAlign: 'center' }}>
+      {trimmed}
+    </div>
+  );
 };
 
   const processedItems = React.useMemo(() => {
@@ -729,67 +788,66 @@ const formatItemSizeWithBracket = (itemSize) => {
     return result;
   }, [data?.items]);
 
-  const styles = {
-    reportContainer: {
-      width: '1050px',
-      margin: '0 auto',
-      backgroundColor: 'white',
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '10px',
-      color: '#000',
-    },
-    page: {
-      width: '100%',
-      backgroundColor: 'white',
-      boxSizing: 'border-box',
-      pageBreakAfter: 'always',
-      pageBreakInside: 'avoid',
-    },
-    lastPage: {
-      width: '100%',
-      backgroundColor: 'white',
-      boxSizing: 'border-box',
-      pageBreakAfter: 'auto',
-    },
-    table: { 
-      // width: '100%', 
-      borderCollapse: 'collapse', 
-      tableLayout: 'fixed',
-      border: '0.5px solid #999',
-    },
-    cell: {
-      border: '0.5px solid #999',
-      padding: '7px 4px',               // ← balanced top/bottom → better vertical centering in PDF
-      textAlign: 'center',
-      verticalAlign: 'middle',
-      wordWrap: 'break-word',
-      fontSize: '9.5px',
-      lineHeight: '1.35',
-    },
-    chemicalCell: {
-      border: '0.5px solid #999',
-      padding: '7px 2px',               // symmetric vertical padding
-      textAlign: 'center',
-      fontSize: '8.5px',
-      width: '3.2%',
-      lineHeight: '1.35',
-    },
-    bold: { fontWeight: 'bold' },
-    textLeft: { textAlign: 'left', paddingLeft: '8px' },
-    textRight: { textAlign: 'right', paddingRight: '8px' },
-    arabic: { fontSize: '16px', fontWeight: 'bold', direction: 'rtl', margin: '0 5px' },
-    companyTitle: { fontSize: '17px', fontWeight: 'bold' },
-    address: { fontWeight: 'normal', fontSize: '9px', marginTop: '4px', display: 'block' },
-    nestedTable: { border: 'none', width: '100%', borderCollapse: 'collapse' },
-    nestedCell: { 
-      border: 'none', 
-      padding: '9px 8px',               // ← increased vertical padding → helps center text
-      borderLeft: '0.5px solid #999',
-      textAlign: 'left',
-      lineHeight: '1.3',
-    },
-    signatureImg: { width: '180px', display: 'block', margin: '8px auto 0 auto' },
-  };
+ const styles = {
+  reportContainer: {
+    width: '1050px',
+    margin: '0 auto',
+    backgroundColor: 'white',
+    fontFamily: 'Arial, sans-serif',
+    fontSize: '10px',
+    color: '#000',
+  },
+  page: {
+    width: '100%',
+    backgroundColor: 'white',
+    boxSizing: 'border-box',
+    pageBreakAfter: 'always',
+    pageBreakInside: 'avoid',
+  },
+  lastPage: {
+    width: '100%',
+    backgroundColor: 'white',
+    boxSizing: 'border-box',
+    pageBreakAfter: 'auto',
+  },
+  table: { 
+    borderCollapse: 'collapse', 
+    tableLayout: 'fixed',
+    border: '1px solid #333',           // Thin outer border
+  },
+  cell: {
+    border: '1px solid #333',         // Thin inner borders (best for PDF)
+    padding: '7px 4px',
+    textAlign: 'center',
+    verticalAlign: 'middle',
+    wordWrap: 'break-word',
+    fontSize: '9.5px',
+    lineHeight: '1.35',
+  },
+  chemicalCell: {
+    border: '1px solid #333',         // Thin chemical cells
+    padding: '7px 2px',
+    textAlign: 'center',
+    fontSize: '8.5px',
+    width: '3.2%',
+    lineHeight: '1.35',
+  },
+  bold: { fontWeight: 'bold' },
+  textLeft: { textAlign: 'left', paddingLeft: '8px' },
+  textRight: { textAlign: 'right', paddingRight: '8px' },
+  arabic: { fontSize: '16px', fontWeight: 'bold', direction: 'rtl', margin: '0 5px' },
+  companyTitle: { fontSize: '17px', fontWeight: 'bold' },
+  address: { fontWeight: 'normal', fontSize: '9px', marginTop: '4px', display: 'block' },
+  nestedTable: { border: 'none', width: '100%', borderCollapse: 'collapse' },
+  nestedCell: { 
+    border: 'none', 
+    padding: '9px 8px',
+    borderLeft: '0.75px solid #444',     // Thin nested borders
+    textAlign: 'left',
+    lineHeight: '1.3',
+  },
+  signatureImg: { width: '200px', display: 'block', margin: '8px auto 0 auto' },
+};
 
   let signatureImage = null;
   if (data.signature === 1) signatureImage = sign1;
@@ -813,10 +871,10 @@ const formatItemSizeWithBracket = (itemSize) => {
   const HeaderSection = () => (
     <>
       <tr>
-        <td colSpan="13" style={{ ...styles.cell, ...styles.textLeft, borderBottom: '0.5px solid #999', borderRight: 'none', fontSize: '9px', minHeight: '28px' }}>
+        <td colSpan="13" style={{ ...styles.cell, ...styles.textLeft, borderBottom: '1px solid black', borderRight: 'none', fontSize: '9px', minHeight: '28px' }}>
           Format No. : ICCL/QC/R/14, Rev 01, Date: 01/04/2024
         </td>
-        <td colSpan="6" style={{ ...styles.cell, ...styles.textRight, borderBottom: '0.5px solid #999', borderLeft: 'none', fontSize: '9px', minHeight: '28px' }}>
+        <td colSpan="6" style={{ ...styles.cell, ...styles.textRight, borderBottom: '1px solid black', borderLeft: 'none', fontSize: '9px', minHeight: '28px' }}>
           C.R. 2055012479
         </td>
         <td rowSpan="2" style={{ ...styles.cell, width: '85px', padding: '6px', minHeight: '56px' }}>
@@ -839,19 +897,19 @@ const formatItemSizeWithBracket = (itemSize) => {
         <td colSpan="15" style={{ ...styles.cell, ...styles.bold, fontSize: '13px', padding: '12px 4px', minHeight: '52px' }}>
           MATERIAL TESTING REPORT AND GUARANTEE CERTIFICATE
         </td>
-        <td colSpan="5" style={{ padding: 0, border: '0.5px solid #999' }}>
+        <td colSpan="5" style={{ padding: 0, border: '1px solid black' }}>
           <table style={styles.nestedTable}>
             <tbody>
               <tr>
-                <td style={{ ...styles.nestedCell, borderBottom: '0.5px solid #999', fontWeight: 'bold', width: '113px', ...styles.textRight, minHeight: '38px' }}>
+                <td style={{ ...styles.nestedCell,borderLeft:'none', borderBottom: '1px solid black', fontWeight: 'bold', width: '113.5px', ...styles.textRight, minHeight: '38px' }}>
                   CERT.NO.:
                 </td>
-                <td style={{ ...styles.nestedCell, borderBottom: '0.5px solid #999', minHeight: '38px', verticalAlign: 'middle' }}>
+                <td style={{ ...styles.nestedCell, borderBottom: '1px solid black', minHeight: '38px', verticalAlign: 'middle' }}>
                   {data.cert_no || '—'}
                 </td>
               </tr>
               <tr>
-                <td style={{ ...styles.nestedCell, fontWeight: 'bold', ...styles.textRight, minHeight: '38px' }}>
+                <td style={{ ...styles.nestedCell,borderLeft:'none', fontWeight: 'bold', ...styles.textRight, minHeight: '38px' }}>
                   DATE:
                 </td>
                 <td style={{ ...styles.nestedCell, minHeight: '38px', verticalAlign: 'middle' }}>
@@ -894,34 +952,82 @@ const formatItemSizeWithBracket = (itemSize) => {
     </>
   );
 
-  // Footer section component (appears only on last page)
-  const FooterSection = () => (
-    <>
-      {testMessages.length > 0 && (
-        <tr>
-          <td colSpan="20" style={{ ...styles.cell, textAlign: 'left', padding: '12px 8px', lineHeight: '1.5' }}>
-            {testMessages.map((msg, i) => (
-              <div key={i} style={{ marginBottom: '6px' }}>{msg}</div>
-            ))}
-          </td>
-        </tr>
-      )}
+// Footer section component
+const FooterSection = () => (
+  <>
+    {testMessages.length > 0 && (
       <tr>
-        <td colSpan="12" style={{ ...styles.cell, textAlign: 'left', padding: '12px 8px', lineHeight: '1.4' }}>
-          <span style={{ ...styles.bold, fontSize: '9px' }}>
-            WE GUARANTEE ABOVE MATERIAL AGAINST ANY MANUFACTURING DEFECT FOR 12 MONTHS <br />
-            FROM DATE OF SUPPLY OR 6 MONTHS FROM DATE OF INSTALLATION WHICHEVER IS EARLIER
-          </span>
-        </td>
-        <td colSpan="8" style={{ ...styles.cell, height: '140px', verticalAlign: 'top', padding: '12px 8px' }}>
-          <div style={styles.bold}>FOR Instrumentation & Controls Co. Ltd</div>
-          {signatureImage && (
-            <img src={signatureImage} alt="Signature" style={styles.signatureImg} crossOrigin="anonymous" />
-          )}
+        <td colSpan="20" style={{ 
+          ...styles.cell, 
+          textAlign: 'left', 
+          padding: '12px 8px 8px 8px',   // Top padding maintained, bottom reduced
+          verticalAlign: 'top',           // ← Top Aligned
+          lineHeight: '1.5',
+          minHeight: '70px'               // Helps maintain space
+        }}>
+          {testMessages.map((msg, i) => (
+            <div key={i} style={{ marginBottom: '8px' }}>
+              {msg}
+            </div>
+          ))}
         </td>
       </tr>
-    </>
-  );
+    )}
+
+  <tr>
+  {/* Left Side - Guarantee Text (Keep Top Border) */}
+  <td colSpan="12" style={{ 
+    ...styles.cell, 
+    textAlign: 'left', 
+    padding: '12px 8px 8px 8px',
+    verticalAlign: 'top', 
+    lineHeight: '1.45',
+    height: '140px',
+    borderTop: '0.75px solid #444'     // ← Top border ONLY here
+  }}>
+    <span style={{ 
+      ...styles.bold, 
+      fontSize: '9px' 
+    }}>
+      WE GUARANTEE ABOVE MATERIAL AGAINST ANY MANUFACTURING DEFECT FOR 12 MONTHS <br />
+      FROM DATE OF SUPPLY OR 6 MONTHS FROM DATE OF INSTALLATION WHICHEVER IS EARLIER
+    </span>
+  </td>
+
+  {/* Right Side - Signature (Remove Top Border) */}
+  <td colSpan="8" style={{ 
+    ...styles.cell, 
+    height: '140px', 
+    verticalAlign: 'top', 
+    padding: '30px 25px 20px 25px',
+    borderTop: 'none',                    // ← No top border on right side
+    borderLeft: '0.75px solid #444',
+    textAlign: 'right'
+  }}>
+    <div style={{ 
+      ...styles.bold, 
+      paddingBottom: '12px',
+      textAlign: 'right'
+    }}>
+      FOR Instrumentation & Controls Co. Ltd
+    </div>
+    
+    {signatureImage && (
+      <img 
+        src={signatureImage} 
+        alt="Signature" 
+        style={{
+          ...styles.signatureImg,
+          width: '200px',
+          margin: '0 0 0 auto'
+        }} 
+        crossOrigin="anonymous" 
+      />
+    )}
+  </td>
+</tr>
+  </>
+);
 
   // Calculate rows per page based on content height
   const ROWS_PER_PAGE = 5;
@@ -956,9 +1062,18 @@ const formatItemSizeWithBracket = (itemSize) => {
                       <tr key={`${pageIndex}-${idx}`}>
                         <td style={{...styles.cell}}>{item.displayPo}</td>
                         {/* <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>{displayValue(item.item_size)}</td> */}
-                        <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>{formatItemSizeWithBracket(item.item_size)}</td>
-                        <td style={{...styles.cell}}>{displayValue(item.raw_material_size)}</td>
-                        <td style={{...styles.cell}}>{displayValue(item.tc_no)}</td>
+<td colSpan="3" style={{ 
+  ...styles.cell, 
+  ...styles.bold, 
+  textAlign: 'center',
+  verticalAlign: 'middle',
+  padding: '8px 4px',
+  lineHeight: '1.25'
+}}>
+  {formatItemSizeWithBracket(item.item_size)}
+</td><td style={{ ...styles.cell, textAlign: 'center', verticalAlign: 'middle', lineHeight: '1.25' }}>
+  {formatRawMaterialSize(item.raw_material_size)}
+</td>                        <td style={{...styles.cell}}>{displayValue(item.tc_no)}</td>
                         <td style={{...styles.cell}}>{displayValue(item.traceability_no)}</td>
                         <td style={{...styles.chemicalCell}}>{formatChemicalValue(item.c)}</td>
                         <td style={{...styles.chemicalCell}}>{formatChemicalValue(item.cr)}</td>
@@ -972,8 +1087,15 @@ const formatItemSizeWithBracket = (itemSize) => {
                         <td style={{...styles.chemicalCell}}>{formatChemicalValue(item.fe)}</td>
                         <td style={{...styles.chemicalCell}}>{formatChemicalValue(item.co)}</td>
                         <td style={{...styles.cell}}>{displayValue(item.qty_pcs)}</td>
-                        <td style={{ ...styles.cell, ...styles.textLeft }}>{displayValue(item.material_grade)}</td>
-                      </tr>
+<td style={{ 
+  ...styles.cell, 
+  textAlign: 'center',
+  verticalAlign: 'middle',
+  padding: '8px 4px',
+  lineHeight: '1.25'
+}}>
+  {formatMaterialGrade(item.material_grade)}
+</td>                      </tr>
                     ))
                   ) : (
                     <tr>

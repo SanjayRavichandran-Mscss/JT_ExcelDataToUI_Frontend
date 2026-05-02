@@ -26,7 +26,8 @@ const {
   getRecordsByTraceabilityNos,
   checkTraceabilityUnique,
   checkTraceabilityNosUnique,
-  getPressuresBySizes
+  getPressuresBySizes,
+  checkDuplicateDeliveryNote
 } = require('../controllers/sheetController');
 
 const multer = require('multer');
@@ -67,7 +68,8 @@ router.get('/get-certificate/:id', getCertificateById);
 router.put('/update-certificate/:id', updateCertificate);
 router.delete('/delete-certificate/:id', deleteCertificate);
 
-
+// Add this line with other routes
+router.post('/check-delivery-note', checkDuplicateDeliveryNote);
 
 
 // In sheetRoutes.js — add these lines

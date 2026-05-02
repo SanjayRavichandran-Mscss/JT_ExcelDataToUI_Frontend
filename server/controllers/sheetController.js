@@ -842,7 +842,46 @@ exports.getCertificateById = async (req, res) => {
 
 
 
+// Check Duplicate Delivery Note
+exports.checkDuplicateDeliveryNote = async (req, res) => {
+  const { delivery_note_no } = req.body;
 
+  if (!delivery_note_no || delivery_note_no.trim() === '') {
+    return res.status(400).json({
+      success: false,
+      message: "Delivery Note No is required"
+    });
+  }
+
+  try {
+    const [rows] = await db.query(
+      `SELECT id, cert_no FROM certificate_details 
+       WHERE delivery_note_no = ? LIMIT 1`,
+      [delivery_note_no.trim()]
+    );
+
+    if (rows.length > 0) {
+      return res.json({
+        success: true,
+        exists: true,
+        message: "Delivery Note already exists",
+        existingCert: rows[0]
+      });
+    }
+
+    res.json({
+      success: true,
+      exists: false,
+      message: "Delivery Note is available"
+    });
+  } catch (error) {
+    console.error('Check duplicate error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while checking delivery note"
+    });
+  }
+};
 
 
 
