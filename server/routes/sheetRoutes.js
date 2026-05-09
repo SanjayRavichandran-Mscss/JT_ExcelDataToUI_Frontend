@@ -27,76 +27,64 @@ const {
   checkTraceabilityUnique,
   checkTraceabilityNosUnique,
   getPressuresBySizes,
-  checkDuplicateDeliveryNote
+  checkDuplicateDeliveryNote,
+  getInspectionCertificatesByCertId,
+  upload
 } = require('../controllers/sheetController');
 
-const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() });
+// Dynamic fields for multiple PDFs
+const uploadFields = Array.from({ length: 100 }, (_, i) => ({
+  name: `pdf_${i}`,
+  maxCount: 1
+}));
 
-// ─── Sheet Routes ────────────────────────────────────────────────
-router.get('/test', testSheet);                     // GET /api/sheet/test
+// ──────────────────────────────────────────────
+// ROUTES
+// ──────────────────────────────────────────────
+
+router.get('/test', testSheet);
 
 // ─── Record Routes ───────────────────────────────────────────────
-router.post('/records', createRecord);              // POST   /api/sheet/records
-router.post('/records/bulk', createMultipleRecords);// POST   /api/sheet/records/bulk
-router.get('/records', getAllRecords);              // GET    /api/sheet/records     ← all records
-router.put('/records/:id', updateRecord);           // PUT    /api/sheet/records/:id
-router.delete('/records/:id', deleteRecord);        // DELETE /api/sheet/records/:id
-
-
-
+router.post('/records', createRecord);
+router.post('/records/bulk', createMultipleRecords);
+router.get('/records', getAllRecords);
+router.put('/records/:id', updateRecord);
+router.delete('/records/:id', deleteRecord);
 
 router.get('/check-traceability-unique', checkTraceabilityUnique);
 router.post('/check-traceability-bulk', checkTraceabilityNosUnique);
+router.get('/records/by-tc', getRecordByTcNo);
 
-router.get('/records/by-tc', getRecordByTcNo);          // GET /api/sheet/records/by-tc?tc_no=ABC123
+// ─── Certificate Routes (PDF Upload) ─────────────────────────────
+router.post('/create-certificate', 
+  upload.fields(uploadFields),     
+  createCertificate
+);
 
+// ─── Bulk Excel Routes ───────────────────────────────────────────
+router.post('/bulk-validate', upload.single('file'), bulkValidateExcel);
+router.post('/bulk-records', upload.single('file'), bulkuploadrecords);
 
-
-
-
-
-
-
-
-
-
-// Individual Route Definitions
-router.post('/create-certificate', createCertificate);
+// ─── Other Routes ────────────────────────────────────────────────
 router.get('/get-all-certificates', getAllCertificates);
 router.get('/get-certificate/:id', getCertificateById);
 router.put('/update-certificate/:id', updateCertificate);
 router.delete('/delete-certificate/:id', deleteCertificate);
 
-// Add this line with other routes
 router.post('/check-delivery-note', checkDuplicateDeliveryNote);
 
-
-// In sheetRoutes.js — add these lines
 router.get('/material-grades', getMaterialGrades);
 router.post('/limits', createLimit);
 router.get('/limits', getAllLimits);
 router.put('/limits/:id', updateLimit);
 router.delete('/limits/:id', deleteLimit);
 
-
-// In sheetRoutes.js — add this line
 router.get('/limits-by-grade', getLimitsByMaterialGrade);
 
-
-router.post('/bulk-validate', upload.single('file'), bulkValidateExcel);
-router.post('/bulk-records', upload.single('file'), bulkuploadrecords);
-
-
 router.get('/next-cert-number', getNextCertNumber);
-
 router.get('/records/by-traceabilities', getRecordsByTraceabilityNos);
 
-
-
-
 router.post('/pressures/by-sizes', getPressuresBySizes);
-
-
+router.get('/get-inspection-certificates', getInspectionCertificatesByCertId);
 
 module.exports = router;

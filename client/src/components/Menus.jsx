@@ -10,6 +10,10 @@ const Menus = () => {
 
   const menuItems = [
     {
+      label: "Dashboard",
+      path: "/dashboard",
+    },
+    {
       label: "Create Records",
       path: "/create-records",
     },
@@ -64,7 +68,7 @@ const Menus = () => {
             src={logo}
             alt="Logo"
             className="h-10 w-10 object-contain cursor-pointer"
-            onClick={() => navigate("/create-records")}
+            onClick={() => navigate("/dashboard")}
           />
         </div>
 

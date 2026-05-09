@@ -1,6 +1,79 @@
 const { db } = require('../config/db'); 
 const XLSX = require('xlsx');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
+const uploadDir = path.join(__dirname, '../uploads/inspection_certificates');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// ==================== UNIVERSAL MULTER (PDF + EXCEL) ====================
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    // You can route Excel to a different folder if you want
+    const isExcel = file.originalname.match(/\.(xlsx|xls)$/i);
+    if (isExcel) {
+      const excelDir = path.join(__dirname, '../uploads/excel');
+      if (!fs.existsSync(excelDir)) fs.mkdirSync(excelDir, { recursive: true });
+      cb(null, excelDir);
+    } else {
+      cb(null, uploadDir);   // PDFs go to inspection_certificates
+    }
+  },
+  filename: function (req, file, cb) {
+    const now = new Date();
+    const day = now.getDate().toString().padStart(2, '0');
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const year = now.getFullYear();
+    const dateStr = `${day}${month}${year}`;
+
+    const originalName = path.parse(file.originalname).name;
+    const timestamp = Date.now();
+
+    let uniqueFilename;
+
+    if (file.originalname.match(/\.(xlsx|xls)$/i)) {
+      uniqueFilename = `bulk_${originalName}_${dateStr}_${timestamp}${path.extname(file.originalname)}`;
+    } else {
+      uniqueFilename = `${originalName}_${dateStr}_${timestamp}.pdf`;
+    }
+
+    cb(null, uniqueFilename);
+  }
+});
+
+// Enhanced File Filter - Supports both PDF and Excel
+const fileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const mimetype = file.mimetype;
+
+  // Allow PDFs
+  if (mimetype === 'application/pdf' || ext === '.pdf') {
+    return cb(null, true);
+  }
+
+  // Allow Excel files
+  if (
+    mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || // .xlsx
+    mimetype === 'application/vnd.ms-excel' ||                                       // .xls
+    ext === '.xlsx' ||
+    ext === '.xls'
+  ) {
+    return cb(null, true);
+  }
+
+  // Reject everything else
+  cb(new Error('Only PDF and Excel (.xlsx, .xls) files are allowed'), false);
+};
+
+// Export the updated multer
+exports.upload = multer({ 
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { fileSize: 25 * 1024 * 1024 } // Increased to 25MB (good for Excel)
+});
 
 exports.testSheet = async (req, res) => {
   try {
@@ -27,9 +100,11 @@ exports.createRecord = async (req, res) => {
   try {
     const {
       tc_no,
-      traceability_no,        // ← NEW
+      traceability_no,
       heat_no,
       size,
+      supplier_number,
+      supplier_name,
       c, cr, ni, mo, mn, si, s, p,
       cu, fe, co,
       material_grade
@@ -45,15 +120,18 @@ exports.createRecord = async (req, res) => {
     const [result] = await db.query(
       `INSERT INTO records (
         tc_no, traceability_no, heat_no, size,
+        supplier_number, supplier_name,
         c, cr, ni, mo, mn, si, s, p,
         cu, fe, co,
         material_grade
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         tc_no.trim(),
         traceability_no?.trim() || null,
         heat_no.trim(),
         size.trim(),
+        supplier_number?.trim() || null,
+        supplier_name?.trim() || null,
         c || null, cr || null, ni || null, mo || null, mn || null,
         si || null, s || null, p || null,
         cu || null, fe || null, co || null,
@@ -194,9 +272,11 @@ exports.createMultipleRecords = async (req, res) => {
 
     const values = records.map(r => [
       r.tc_no?.trim() || '',
-      r.traceability_no?.trim() || null,      // ← NEW
+      r.traceability_no?.trim() || null,
       r.heat_no?.trim() || '',
       r.size?.trim() || '',
+      r.supplier_no?.trim() || null,        // ← Added
+      r.supplier_name?.trim() || null,      // ← Added
       r.c || null,
       r.cr || null,
       r.ni || null,
@@ -214,6 +294,7 @@ exports.createMultipleRecords = async (req, res) => {
     const [result] = await db.query(
       `INSERT INTO records (
         tc_no, traceability_no, heat_no, size,
+        supplier_number, supplier_name,           /* Make sure column names match your DB */
         c, cr, ni, mo, mn, si, s, p,
         cu, fe, co,
         material_grade
@@ -228,10 +309,17 @@ exports.createMultipleRecords = async (req, res) => {
     });
   } catch (error) {
     console.error('Bulk create error:', error);
-    res.status(500).json({ success: false, message: 'Failed to create records', error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to create records', 
+      error: error.message 
+    });
   }
 };
 
+// -------------------------------
+// GET ALL RECORDS
+// -------------------------------
 // -------------------------------
 // GET ALL RECORDS
 // -------------------------------
@@ -239,10 +327,18 @@ exports.getAllRecords = async (req, res) => {
   try {
     const [rows] = await db.query(`
       SELECT 
-        id, tc_no, traceability_no, heat_no, size,
+        id, 
+        tc_no, 
+        traceability_no, 
+        supplier_number,      -- Added
+        supplier_name,        -- Added
+        heat_no, 
+        size,
         c, cr, ni, mo, mn, si, s, p,
         cu, fe, co,
-        material_grade, created_at, updated_at
+        material_grade, 
+        created_at, 
+        updated_at
       FROM records
       ORDER BY created_at DESC
     `);
@@ -254,7 +350,11 @@ exports.getAllRecords = async (req, res) => {
     });
   } catch (error) {
     console.error('Get all records error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch records', error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch records', 
+      error: error.message 
+    });
   }
 };
 
@@ -265,7 +365,9 @@ exports.updateRecord = async (req, res) => {
   const { id } = req.params;
   const {
     tc_no,
-    traceability_no,          // ← NEW
+    traceability_no,
+    supplier_number,      // Added
+    supplier_name,        // Added
     heat_no,
     size,
     c, cr, ni, mo, mn, si, s, p,
@@ -276,7 +378,12 @@ exports.updateRecord = async (req, res) => {
   try {
     const [result] = await db.query(
       `UPDATE records SET
-        tc_no = ?, traceability_no = ?, heat_no = ?, size = ?,
+        tc_no = ?, 
+        traceability_no = ?, 
+        supplier_number = ?,     -- Added
+        supplier_name = ?,       -- Added
+        heat_no = ?, 
+        size = ?,
         c = ?, cr = ?, ni = ?, mo = ?, mn = ?, si = ?, s = ?, p = ?,
         cu = ?, fe = ?, co = ?,
         material_grade = ?,
@@ -285,6 +392,8 @@ exports.updateRecord = async (req, res) => {
       [
         tc_no?.trim() || '',
         traceability_no?.trim() || null,
+        supplier_number?.trim() || null,     // Added
+        supplier_name?.trim() || null,       // Added
         heat_no?.trim() || '',
         size?.trim() || '',
         c || null, cr || null, ni || null, mo || null, mn || null,
@@ -299,10 +408,17 @@ exports.updateRecord = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Record not found' });
     }
 
-    res.status(200).json({ success: true, message: 'Record updated successfully' });
+    res.status(200).json({ 
+      success: true, 
+      message: 'Record updated successfully' 
+    });
   } catch (error) {
     console.error('Update record error:', error);
-    res.status(500).json({ success: false, message: 'Failed to update record', error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to update record', 
+      error: error.message 
+    });
   }
 };
 
@@ -449,79 +565,81 @@ exports.getRecordByTcNo = async (req, res) => {
 
 
 
-// controllers/certificateController.js  (example)
+// ==================== CREATE CERTIFICATE ====================
 exports.createCertificate = async (req, res) => {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
 
+    console.log("📂 Files received:", req.files ? Object.keys(req.files) : "No files");
+
+    // Parse payload
+    let payload;
+    try {
+      payload = JSON.parse(req.body.payload);
+    } catch (e) {
+      return res.status(400).json({ success: false, error: "Invalid payload" });
+    }
+
     const {
-      cert_no,
-      cert_date,
-      delivery_note_no,
-      delivery_date,
-      customer_name,
-      po_no,
-      po_date,
-      items = [],
-      signature = 0,
-      test_line_items = [],     // ← this is now coming from frontend
-    } = req.body;
+      cert_no, cert_date, delivery_note_no, delivery_date, customer_name,
+      po_no, po_date, items = [], signature = 0, test_line_items = []
+    } = payload;
 
-    const validSignature = [0, 1, 2].includes(Number(signature))
-      ? Number(signature)
-      : 0;
+    const validSignature = [0, 1, 2].includes(Number(signature)) ? Number(signature) : 0;
 
-    // 1. Insert header
+    // Insert Header
     const [headerResult] = await connection.query(
       `INSERT INTO certificate_details 
-      (cert_no, cert_date, delivery_note_no, delivery_date, customer_name, po_no, po_date, signature, test_line_items)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        cert_no,
-        cert_date,
-        delivery_note_no || null,
-        delivery_date || null,
-        customer_name || null,
-        po_no || null,
-        po_date || null,
-        validSignature,
-        JSON.stringify(test_line_items),   // ← stored as JSON array
-      ]
+       (cert_no, cert_date, delivery_note_no, delivery_date, customer_name, 
+        po_no, po_date, signature, test_line_items)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [cert_no, cert_date, delivery_note_no || null, delivery_date || null,
+       customer_name || null, po_no || null, po_date || null, validSignature,
+       JSON.stringify(test_line_items)]
     );
 
     const certificate_id = headerResult.insertId;
 
-    // 2. Insert items
+    // Insert Items with Relative File Path
     if (items.length > 0) {
-      const itemValues = items.map((item) => [
-        certificate_id,
-        item.po_lineitem_no || null,
-        item.item_size || null,
-        item.raw_material_size || null,
-        item.tc_no || null,
-        item.traceability_no || null,
-        item.qty_pcs || null,
-        item.material_grade || null,
-        item.c || null,
-        item.cr || null,
-        item.ni || null,
-        item.mo || null,
-        item.mn || null,
-        item.si || null,
-        item.s || null,
-        item.p || null,
-        item.cu || null,
-        item.fe || null,
-        item.co || null,
-      ]);
+      const itemValues = items.map((item, index) => {
+        const fileArray = req.files[`pdf_${index}`];
+        const file = fileArray && fileArray[0];
+
+        let filePath = null;
+
+        if (file) {
+          // ✅ Store only relative path: uploads/inspection_certificates/filename.pdf
+          const relativePath = `uploads/inspection_certificates/${file.filename}`;
+          filePath = relativePath.replace(/\\/g, '/'); // ensure forward slashes
+
+          console.log(`✅ File saved for index ${index}: ${filePath}`);
+        }
+
+        return [
+          certificate_id,
+          item.po_lineitem_no || null,
+          item.item_size || null,
+          item.raw_material_size || null,
+          item.tc_no || null,
+          item.traceability_no || null,
+          item.qty_pcs || null,
+          item.material_grade || null,
+          item.c || null, item.cr || null, item.ni || null,
+          item.mo || null, item.mn || null, item.si || null,
+          item.s || null, item.p || null, item.cu || null,
+          item.fe || null, item.co || null,
+          filePath  // ← Now stores relative path
+        ];
+      });
 
       await connection.query(
         `INSERT INTO certificate_records (
-            certificate_id, po_lineitem_no, item_size, raw_material_size,
-            tc_no, traceability_no, qty_pcs, material_grade,
-            c, cr, ni, mo, mn, si, s, p, cu, fe, co
-          ) VALUES ?`,
+          certificate_id, po_lineitem_no, item_size, raw_material_size,
+          tc_no, traceability_no, qty_pcs, material_grade,
+          c, cr, ni, mo, mn, si, s, p, cu, fe, co, inspection_certificate
+        ) VALUES ?`,
         [itemValues]
       );
     }
@@ -532,17 +650,37 @@ exports.createCertificate = async (req, res) => {
       success: true,
       message: 'Certificate created successfully',
       certificateId: certificate_id,
-      cert_no,
     });
+
   } catch (error) {
     await connection.rollback();
-    console.error('Create certificate error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to create certificate'
-    });
+    console.error('❌ Create certificate error:', error);
+    res.status(500).json({ success: false, error: error.message });
   } finally {
     connection.release();
+  }
+};
+
+// Also update the checkDeliveryNote function (no changes needed, just for reference)
+exports.checkDeliveryNote = async (req, res) => {
+  const { delivery_note_no } = req.body;
+  
+  try {
+    const [rows] = await db.query(
+      'SELECT COUNT(*) as count FROM certificate_details WHERE delivery_note_no = ?',
+      [delivery_note_no]
+    );
+    
+    res.json({
+      success: true,
+      exists: rows[0].count > 0
+    });
+  } catch (error) {
+    console.error('Check delivery note error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 };
 
@@ -1983,6 +2121,79 @@ exports.getPressuresBySizes = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch pressures by sizes',
+      error: error.message
+    });
+  }
+};
+
+
+
+
+
+
+
+
+
+// ==================== GET INSPECTION CERTIFICATES BY CERTIFICATE ID (using query) ====================
+exports.getInspectionCertificatesByCertId = async (req, res) => {
+  try {
+    const { certificate_id } = req.query;
+
+    if (!certificate_id || isNaN(Number(certificate_id))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid certificate_id query parameter is required'
+      });
+    }
+
+    // Query to fetch tc_no and inspection_certificate from certificate_records
+    const [rows] = await db.query(
+      `SELECT 
+        id,
+        tc_no, 
+        inspection_certificate,
+        po_lineitem_no,
+        item_size
+       FROM certificate_records 
+       WHERE certificate_id = ?
+       AND inspection_certificate IS NOT NULL
+       AND inspection_certificate != ''`,
+      [certificate_id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No inspection certificates found for certificate_id: ${certificate_id}`
+      });
+    }
+
+    // Convert relative paths to full URLs
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    
+    const certificates = rows.map(row => ({
+      id: row.id,
+      tc_no: row.tc_no,
+      po_lineitem_no: row.po_lineitem_no,
+      item_size: row.item_size,
+      inspection_certificate_url: row.inspection_certificate 
+        ? `${baseUrl}/${row.inspection_certificate.replace(/\\/g, '/')}`
+        : null,
+      inspection_certificate_path: row.inspection_certificate
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: certificates.length,
+      certificate_id: certificate_id,
+      inspection_certificates: certificates
+    });
+
+  } catch (error) {
+    console.error('Error in getInspectionCertificatesByCertId:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch inspection certificates',
       error: error.message
     });
   }

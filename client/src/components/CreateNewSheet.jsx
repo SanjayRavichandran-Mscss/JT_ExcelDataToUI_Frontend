@@ -1,13 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { Save } from 'lucide-react';
+import { Save, Upload } from 'lucide-react';
 import logo from './Assets/logo.png';
 
 // Import Signatures
 import sign1 from './Assets/Signatures/sign1.jpeg';
 import sign2 from './Assets/Signatures/sign2.jpeg';
-
-
 
 const CreateNewSheet = () => {
   const [multiSheetData, setMultiSheetData] = useState([]);
@@ -22,9 +20,10 @@ const CreateNewSheet = () => {
 
   const certificateRef = useRef(null);
   const fileInputRef = useRef(null);
-const [deliveryNoteExists, setDeliveryNoteExists] = useState(false);
-const [checkingDeliveryNote, setCheckingDeliveryNote] = useState(false);
-
+  const [deliveryNoteExists, setDeliveryNoteExists] = useState(false);
+  const [checkingDeliveryNote, setCheckingDeliveryNote] = useState(false);
+  // New State for PDF Uploads per row
+  const [pdfUploads, setPdfUploads] = useState({}); // { itemIndex: { fileName, file } }
   useEffect(() => {
     fetchNextCertNumber();
   }, []);
@@ -298,9 +297,9 @@ const [checkingDeliveryNote, setCheckingDeliveryNote] = useState(false);
 
     if (!tcNoValue.trim()) {
       Object.assign(item, {
-        rawMtlSize: '', 
+        rawMtlSize: '',
         C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', Cu: '', Fe: '', Co: '',
-        matlConfTo: '', 
+        matlConfTo: '',
         workingPressure: null,
         testPressure: oldTestPressure,   // Restore
       });
@@ -317,16 +316,16 @@ const [checkingDeliveryNote, setCheckingDeliveryNote] = useState(false);
         const r = json.record;
         Object.assign(item, {
           rawMtlSize: r.size || '',
-          C: r.c || '', 
-          Cr: r.cr || '', 
-          Ni: r.ni || '', 
+          C: r.c || '',
+          Cr: r.cr || '',
+          Ni: r.ni || '',
           Mo: r.mo || '',
-          Mn: r.mn || '', 
-          Si: r.si || '', 
-          S: r.s || '', 
+          Mn: r.mn || '',
+          Si: r.si || '',
+          S: r.s || '',
           P: r.p || '',
-          Cu: r.cu || '', 
-          Fe: r.fe || '', 
+          Cu: r.cu || '',
+          Fe: r.fe || '',
           Co: r.co || '',
           matlConfTo: r.material_grade || '',
           workingPressure: r.working_pressure || null,
@@ -334,9 +333,9 @@ const [checkingDeliveryNote, setCheckingDeliveryNote] = useState(false);
         });
       } else {
         Object.assign(item, {
-          rawMtlSize: '', 
+          rawMtlSize: '',
           C: '', Cr: '', Ni: '', Mo: '', Mn: '', Si: '', S: '', P: '', Cu: '', Fe: '', Co: '',
-          matlConfTo: '', 
+          matlConfTo: '',
           workingPressure: null,
           testPressure: oldTestPressure,
         });
@@ -353,125 +352,111 @@ const [checkingDeliveryNote, setCheckingDeliveryNote] = useState(false);
   };
 
   // ====================== UPDATE HYDRO TEST MESSAGES (Footer) ======================
-  // const updateHydroTestMessages = (items) => {
-  //   if (!items?.length) {
-  //     setHydroTestMessages([]);
-  //     return;
-  //   }
+  const updateHydroTestMessages = (items) => {
+    if (!items?.length) {
+      setHydroTestMessages([]);
+      return;
+    }
 
-  //   const pressureGroups = {};
+    const groups = {};
 
-  //   items
-  //     .filter((item) => item.poLi && item.testPressure)
-  //     .forEach((item) => {
-  //       const key = item.testPressure;
-  //       if (!pressureGroups[key]) {
-  //         pressureGroups[key] = { testPressure: item.testPressure, poLis: [] };
-  //       }
-  //       pressureGroups[key].poLis.push(item.poLi);
-  //     });
+    items
+      .filter((item) => item.poLi && item.testPressure)
+      .forEach((item) => {
+        const isValve = item.itemSize && item.itemSize.toLowerCase().includes('valve');
 
-  //   const messages = Object.values(pressureGroups).map((group) => {
-  //     const poLis = group.poLis.sort((a, b) => parseFloat(a) - parseFloat(b));
-  //     let poLiText = poLis.length === 1 
-  //       ? poLis[0] 
-  //       : poLis.every((n, i, arr) => i === 0 || Number(n) === Number(arr[i-1]) + 0.1)
-  //         ? `${poLis[0]} to ${poLis[poLis.length - 1]}`
-  //         : poLis.join(' & ');
+        // 👇 KEY NOW INCLUDES TYPE (VALVE / FITTING)
+        const key = `${item.testPressure}_${isValve ? 'VALVE' : 'FITTING'}`;
 
-  //     return {
-  //       full: `TEST: ABOVE FITTINGS (L/I: ${poLiText}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${group.testPressure} WITHOUT ANY LEAKAGE.`,
-  //       poLiPart: poLiText,
-  //       pressurePart: group.testPressure,
-  //     };
-  //   });
+        if (!groups[key]) {
+          groups[key] = {
+            testPressure: item.testPressure,
+            poLis: [],
+            type: isValve ? 'VALVE' : 'FITTING',
+          };
+        }
 
-  //   setHydroTestMessages(messages);
-  // };
+        groups[key].poLis.push(item.poLi);
+      });
 
+    const messages = Object.values(groups).map((group) => {
+      const poLis = group.poLis.sort((a, b) => parseFloat(a) - parseFloat(b));
 
+      let poLiText = poLis.length === 1
+        ? poLis[0]
+        : poLis.every((n, i, arr) => i === 0 || Number(n) === Number(arr[i - 1]) + 0.1)
+          ? `${poLis[0]} to ${poLis[poLis.length - 1]}`
+          : poLis.join(' & ');
 
+      //  DIFFERENT MESSAGE BASED ON TYPE
+      const fullMessage = group.type === 'VALVE'
+        ? `TEST: ABOVE (L/I: ${poLiText}) VALVES ARE 100% HYDRO TESTED AT ${group.testPressure} WITHOUT ANY LEAKAGE.`
+        : `TEST: ABOVE FITTINGS (L/I: ${poLiText}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${group.testPressure} WITHOUT ANY LEAKAGE.`;
 
-  // ====================== UPDATE HYDRO TEST MESSAGES (Footer) ======================
-const updateHydroTestMessages = (items) => {
-  if (!items?.length) {
-    setHydroTestMessages([]);
-    return;
-  }
-
-  const groups = {};
-
-  items
-    .filter((item) => item.poLi && item.testPressure)
-    .forEach((item) => {
-      const isValve = item.itemSize && item.itemSize.toLowerCase().includes('valve');
-
-      // 👇 KEY NOW INCLUDES TYPE (VALVE / FITTING)
-      const key = `${item.testPressure}_${isValve ? 'VALVE' : 'FITTING'}`;
-
-      if (!groups[key]) {
-        groups[key] = {
-          testPressure: item.testPressure,
-          poLis: [],
-          type: isValve ? 'VALVE' : 'FITTING',
-        };
-      }
-
-      groups[key].poLis.push(item.poLi);
+      return {
+        full: fullMessage,
+        poLiPart: poLiText,
+        pressurePart: group.testPressure,
+      };
     });
 
-  const messages = Object.values(groups).map((group) => {
-    const poLis = group.poLis.sort((a, b) => parseFloat(a) - parseFloat(b));
+    setHydroTestMessages(messages);
+  };
 
-    let poLiText = poLis.length === 1
-      ? poLis[0]
-      : poLis.every((n, i, arr) => i === 0 || Number(n) === Number(arr[i - 1]) + 0.1)
-        ? `${poLis[0]} to ${poLis[poLis.length - 1]}`
-        : poLis.join(' & ');
+  // Replace the handleHydroMessagePartChange function with this updated version
+  const handleHydroMessagePartChange = (msgIndex, field, newValue) => {
+    setHydroTestMessages(prev => {
+      const updated = [...prev];
+      const msg = { ...updated[msgIndex] };
 
-    //  DIFFERENT MESSAGE BASED ON TYPE
-    const fullMessage = group.type === 'VALVE'
-      ? `TEST: ABOVE (L/I: ${poLiText}) VALVES ARE 100% HYDRO TESTED AT ${group.testPressure} WITHOUT ANY LEAKAGE.`
-      : `TEST: ABOVE FITTINGS (L/I: ${poLiText}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${group.testPressure} WITHOUT ANY LEAKAGE.`;
+      if (field === 'full') {
+        // If editing the full message, update the full text and parse the parts
+        msg.full = newValue;
 
-    return {
-      full: fullMessage,
-      poLiPart: poLiText,
-      pressurePart: group.testPressure,
-    };
-  });
+        // Try to extract the parts from the full message
+        const liMatch = newValue.match(/\(L\/I:\s*([^)]+)\)/);
+        const pressureMatch = newValue.match(/AT\s+(.+?)\s+WITHOUT/);
 
-  setHydroTestMessages(messages);
-};
+        msg.poLiPart = liMatch ? liMatch[1].trim() : msg.poLiPart;
+        msg.pressurePart = pressureMatch ? pressureMatch[1].trim() : msg.pressurePart;
+      } else if (field === 'poLi') {
+        msg.poLiPart = newValue;
+        msg.full = `TEST: ABOVE FITTINGS (L/I: ${msg.poLiPart}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${msg.pressurePart} WITHOUT ANY LEAKAGE.`;
+      } else if (field === 'pressure') {
+        msg.pressurePart = newValue;
+        msg.full = `TEST: ABOVE FITTINGS (L/I: ${msg.poLiPart}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${msg.pressurePart} WITHOUT ANY LEAKAGE.`;
+      }
 
-// Replace the handleHydroMessagePartChange function with this updated version
-const handleHydroMessagePartChange = (msgIndex, field, newValue) => {
-  setHydroTestMessages(prev => {
-    const updated = [...prev];
-    const msg = { ...updated[msgIndex] };
-    
-    if (field === 'full') {
-      // If editing the full message, update the full text and parse the parts
-      msg.full = newValue;
-      
-      // Try to extract the parts from the full message
-      const liMatch = newValue.match(/\(L\/I:\s*([^)]+)\)/);
-      const pressureMatch = newValue.match(/AT\s+(.+?)\s+WITHOUT/);
-      
-      msg.poLiPart = liMatch ? liMatch[1].trim() : msg.poLiPart;
-      msg.pressurePart = pressureMatch ? pressureMatch[1].trim() : msg.pressurePart;
-    } else if (field === 'poLi') {
-      msg.poLiPart = newValue;
-      msg.full = `TEST: ABOVE FITTINGS (L/I: ${msg.poLiPart}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${msg.pressurePart} WITHOUT ANY LEAKAGE.`;
-    } else if (field === 'pressure') {
-      msg.pressurePart = newValue;
-      msg.full = `TEST: ABOVE FITTINGS (L/I: ${msg.poLiPart}) ARE HYDRO TESTED MAKING A SAMPLE LOOP AT ${msg.pressurePart} WITHOUT ANY LEAKAGE.`;
+      updated[msgIndex] = msg;
+      return updated;
+    });
+  };
+
+  // ====================== PDF UPLOAD FUNCTIONS ======================
+  const handlePdfUpload = (itemIndex, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      alert('Only PDF files are allowed!');
+      return;
     }
-    
-    updated[msgIndex] = msg;
-    return updated;
-  });
-};
+
+    setPdfUploads(prev => ({
+      ...prev,
+      [itemIndex]: {
+        fileName: file.name,
+        file: file
+      }
+    }));
+
+    e.target.value = ''; // Reset input
+  };
+
+  const triggerPdfUpload = (itemIndex) => {
+    const input = document.getElementById(`pdf-upload-${itemIndex}`);
+    input?.click();
+  };
 
 const handleSubmitCertificate = async () => {
   if (multiSheetData.length === 0) return;
@@ -479,93 +464,119 @@ const handleSubmitCertificate = async () => {
     alert("Delivery Note already exists! Cannot create duplicate.");
     return;
   }
-    setSubmitLoading(true);
-    const data = multiSheetData[0];
 
+  setSubmitLoading(true);
+  const data = multiSheetData[0];
 
-    
-    const payload = {
-      cert_no: certNo,
-      cert_date: todayDate,
-      delivery_note_no: data.headers.deliveryNoteNo,
-      delivery_date: data.headers.deliveryDate,
-      customer_name: data.headers.customerName,
-      po_no: data.headers.poNo,
-      po_date: data.headers.poDate,
-      signature: selectedSign,
-      test_line_items: hydroTestMessages.map(m => m.full),
-      items: data.items.map((item) => ({
-        po_lineitem_no: item.poLi,
-        item_size: item.itemSize,
-        raw_material_size: item.rawMtlSize,
-        tc_no: item.tcNo,
-        traceability_no: item.traceability,
-        qty_pcs: item.qty,
-        material_grade: item.matlConfTo,
-        c: item.C, cr: item.Cr, ni: item.Ni, mo: item.Mo,
-        mn: item.Mn, si: item.Si, s: item.S, p: item.P,
-        cu: item.Cu, fe: item.Fe, co: item.Co
-      })),
-    };
+  const formData = new FormData();
+
+  // === Send Main Data as JSON string ===
+  const payload = {
+    cert_no: certNo,
+    cert_date: todayDate,
+    delivery_note_no: data.headers.deliveryNoteNo,
+    delivery_date: data.headers.deliveryDate,
+    customer_name: data.headers.customerName,
+    po_no: data.headers.poNo,
+    po_date: data.headers.poDate,
+    signature: selectedSign,
+    test_line_items: hydroTestMessages.map(m => m.full),
+    items: data.items.map((item, idx) => ({
+      po_lineitem_no: item.poLi,
+      item_size: item.itemSize,
+      raw_material_size: item.rawMtlSize,
+      tc_no: item.tcNo,
+      traceability_no: item.traceability,
+      qty_pcs: item.qty,
+      material_grade: item.matlConfTo,
+      c: item.C, 
+      cr: item.Cr, 
+      ni: item.Ni, 
+      mo: item.Mo,
+      mn: item.Mn, 
+      si: item.Si, 
+      s: item.S, 
+      p: item.P,
+      cu: item.Cu, 
+      fe: item.Fe, 
+      co: item.Co,
+    })),
+  };
+
+  formData.append('payload', JSON.stringify(payload));
+
+  // === Append PDF Files ===
+  let hasFiles = false;
+  data.items.forEach((item, idx) => {
+    const pdfData = pdfUploads[idx];
+    if (pdfData?.file) {
+      formData.append(`pdf_${idx}`, pdfData.file);
+      hasFiles = true;
+      console.log(`Appending file: pdf_${idx} → ${pdfData.file.name}`);
+    }
+  });
+
+  console.log(`Total files being sent: ${Object.keys(pdfUploads).length}`);
+
+  try {
+    const response = await fetch('http://103.118.158.188:5000/api/sheet/create-certificate', {
+      method: 'POST',
+      body: formData,          // ← Do NOT set Content-Type header
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('Certificate created successfully with PDFs!');
+      setPdfUploads({});        // Clear after success
+      fetchNextCertNumber();
+    } else {
+      alert('Failed: ' + (result.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('Submit error:', error);
+    alert('Network error while saving certificate');
+  } finally {
+    setSubmitLoading(false);
+  }
+};
+
+  // Check Delivery Note Duplicate
+  const checkDeliveryNote = async (deliveryNote) => {
+    if (!deliveryNote || deliveryNote.trim() === '' || deliveryNote === '-') {
+      setDeliveryNoteExists(false);
+      return;
+    }
+
+    setCheckingDeliveryNote(true);
 
     try {
-      const response = await fetch('http://103.118.158.188:5000/api/sheet/create-certificate', {
+      const res = await fetch('http://103.118.158.188:5000/api/sheet/check-delivery-note', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ delivery_note_no: deliveryNote.trim() })
       });
 
-      const result = await response.json();
-      if (result.success) {
-        alert('Certificate stored in database successfully!');
-        fetchNextCertNumber();
-      } else {
-        alert('Failed to store: ' + (result.error || 'Unknown error'));
-      }
-    } catch (error) {
-      console.error('Submit error:', error);
-      alert('Network error while saving certificate');
+      const result = await res.json();
+
+      setDeliveryNoteExists(result.exists || false);
+    } catch (err) {
+      console.error("Failed to check delivery note:", err);
+      setDeliveryNoteExists(false);
     } finally {
-      setSubmitLoading(false);
+      setCheckingDeliveryNote(false);
     }
   };
 
-  // Check Delivery Note Duplicate
-const checkDeliveryNote = async (deliveryNote) => {
-  if (!deliveryNote || deliveryNote.trim() === '' || deliveryNote === '-') {
-    setDeliveryNoteExists(false);
-    return;
-  }
+  const formatChemicalValue = (value) => {
+    if (value === undefined || value === null || value === '') return '---';
 
-  setCheckingDeliveryNote(true);
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) return '---';
 
-  try {
-    const res = await fetch('http://103.118.158.188:5000/api/sheet/check-delivery-note', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ delivery_note_no: deliveryNote.trim() })
-    });
-
-    const result = await res.json();
-
-    setDeliveryNoteExists(result.exists || false);
-  } catch (err) {
-    console.error("Failed to check delivery note:", err);
-    setDeliveryNoteExists(false);
-  } finally {
-    setCheckingDeliveryNote(false);
-  }
-};
-
-const formatChemicalValue = (value) => {
-  if (value === undefined || value === null || value === '') return '---';
-
-  const numValue = parseFloat(value);
-  if (isNaN(numValue)) return '---';
-
-  // Always show 3 decimal places (including 0 values)
-  return numValue.toFixed(3);
-};
+    // Always show 3 decimal places (including 0 values)
+    return numValue.toFixed(3);
+  };
 
   const displayValue = (value) => {
     if (value === undefined || value === null || value === '') return '—';
@@ -581,49 +592,49 @@ const formatChemicalValue = (value) => {
     return `${day}-${month}-${year}`;
   };
 
-// Function to extract bracket content and format for display
-const formatItemSizeWithBracket = (itemSize) => {
-  if (!itemSize) return '—';
-  
-  // Extract content within brackets
-  const bracketRegex = /\(([^)]+)\)/g;
-  const matches = [];
-  let match;
-  
-  while ((match = bracketRegex.exec(itemSize)) !== null) {
-    matches.push(match[1]);
-  }
-  
-  // If bracket content found, format it on a separate line
-  if (matches.length > 0) {
-    // Remove bracket content from main text and clean up
-    let mainText = itemSize.replace(/\s*\([^)]+\)\s*/g, '').trim();
-    // If mainText is empty after removing brackets, use the bracket content as main
-    if (!mainText && matches.length > 0) {
+  // Function to extract bracket content and format for display
+  const formatItemSizeWithBracket = (itemSize) => {
+    if (!itemSize) return '—';
+
+    // Extract content within brackets
+    const bracketRegex = /\(([^)]+)\)/g;
+    const matches = [];
+    let match;
+
+    while ((match = bracketRegex.exec(itemSize)) !== null) {
+      matches.push(match[1]);
+    }
+
+    // If bracket content found, format it on a separate line
+    if (matches.length > 0) {
+      // Remove bracket content from main text and clean up
+      let mainText = itemSize.replace(/\s*\([^)]+\)\s*/g, '').trim();
+      // If mainText is empty after removing brackets, use the bracket content as main
+      if (!mainText && matches.length > 0) {
+        return (
+          <>
+            {matches.join(', ')}
+          </>
+        );
+      }
       return (
         <>
-          {matches.join(', ')}
+          {mainText}<br />
+          <span style={{ fontSize: '9px', color: '#666' }}>({matches.join(', ')})</span>
         </>
       );
     }
-    return (
-      <>
-        {mainText}<br />
-        <span style={{ fontSize: '9px', color: '#666' }}>({matches.join(', ')})</span>
-      </>
-    );
-  }
-  
-  return itemSize;
-};
+
+    return itemSize;
+  };
 
 
   const styles = {
     reportContainer: { width: '1200px', margin: '0 auto', backgroundColor: 'white', fontFamily: 'Arial, sans-serif', fontSize: '11px', color: '#000' },
     page: { width: '1200px', minHeight: '780px', border: '2px solid #000', backgroundColor: 'white', boxSizing: 'border-box' },
-    table: {  borderCollapse: 'collapse', tableLayout: 'fixed' },
+    table: { borderCollapse: 'collapse', tableLayout: 'fixed' },
     cell: { border: '1px solid #000', padding: '10px 4px', textAlign: 'center', verticalAlign: 'middle', wordWrap: 'break-word', fontFamily: 'Arial, sans-serif' },
-    chemicalcell: { border: '1px solid #000', padding: '10px',width: '2px', textAlign: 'center', verticalAlign: 'middle', wordWrap: 'break-word', fontFamily: 'Arial, sans-serif' },
+    chemicalcell: { border: '1px solid #000', padding: '10px', width: '2px', textAlign: 'center', verticalAlign: 'middle', wordWrap: 'break-word', fontFamily: 'Arial, sans-serif' },
     tracecell: { fontSize: '10px', border: '1px solid #000', padding: '4px 3px', textAlign: 'center', verticalAlign: 'middle', wordWrap: 'break-word' },
     bold: { fontWeight: 'bold' },
     textLeft: { textAlign: 'left', paddingLeft: '8px' },
@@ -652,25 +663,25 @@ const formatItemSizeWithBracket = (itemSize) => {
           </button>
 
           {multiSheetData.length > 0 && (
-        <button 
-  onClick={handleSubmitCertificate} 
-  disabled={submitLoading || deliveryNoteExists || checkingDeliveryNote}
-  style={{ 
-    padding: '10px 25px', 
-    cursor: (submitLoading || deliveryNoteExists) ? 'not-allowed' : 'pointer', 
-    background: deliveryNoteExists ? '#dc3545' : '#28a745', 
-    color: '#fff', 
-    borderRadius: '4px', 
-    border: 'none', 
-    fontWeight: 'bold' 
-  }}
->
-  {deliveryNoteExists 
-    ? 'Delivery Note Already Exists' 
-    : submitLoading 
-      ? 'Saving...' 
-      : 'Submit'}
-</button>
+            <button
+              onClick={handleSubmitCertificate}
+              disabled={submitLoading || deliveryNoteExists || checkingDeliveryNote}
+              style={{
+                padding: '10px 25px',
+                cursor: (submitLoading || deliveryNoteExists) ? 'not-allowed' : 'pointer',
+                background: deliveryNoteExists ? '#dc3545' : '#28a745',
+                color: '#fff',
+                borderRadius: '4px',
+                border: 'none',
+                fontWeight: 'bold'
+              }}
+            >
+              {deliveryNoteExists
+                ? 'Delivery Note Already Exists'
+                : submitLoading
+                  ? 'Saving...'
+                  : 'Submit'}
+            </button>
           )}
 
           {(batchLoading || pressureLoading) && (
@@ -719,7 +730,7 @@ const formatItemSizeWithBracket = (itemSize) => {
                       <span style={styles.companyTitle}>Instrumentation & Controls Co. Ltd. (ICCL).</span>
                       <span style={styles.arabic}>شركة الآلات الدقيقة والتحكم المحدودة</span>
                       <div style={styles.address}>
-                        Lot #56, Block #02, Section G, Support Industries, Jubail 2, P.O. Box No. 11300, Jubail – 31961 KSA  
+                        Lot #56, Block #02, Section G, Support Industries, Jubail 2, P.O. Box No. 11300, Jubail – 31961 KSA
                         Email:info@icclksa.com , Web:www.icclksa.com
                       </div>
                     </div>
@@ -787,19 +798,17 @@ const formatItemSizeWithBracket = (itemSize) => {
                 </tr>
 
                 <tr style={{ ...styles.bold, fontSize: '10px' }}>
-                  {['C','Cr','Ni','Mo','Mn','Si','S','P','Cu','Fe','Co'].map(c => (
+                  {['C', 'Cr', 'Ni', 'Mo', 'Mn', 'Si', 'S', 'P', 'Cu', 'Fe', 'Co'].map(c => (
                     <td key={c} style={{ ...styles.cell, width: '55px' }}>{c}</td>
                   ))}
                 </tr>
 
-                {/* Data Rows */}
+                {/* Data Rows - No extra column inside certificate */}
                 {items.map((item, idx) => (
                   <tr key={idx} style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
                     <td style={styles.cell}>{item.poLi}</td>
-                    <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft,}}>
-                      {/* {displayValue(item.itemSize)} */}
-                        {formatItemSizeWithBracket(item.itemSize)}
-
+                    <td colSpan="3" style={{ ...styles.cell, ...styles.bold, ...styles.textLeft }}>
+                      {formatItemSizeWithBracket(item.itemSize)}
                     </td>
                     <td style={styles.cell}>{displayValue(item.rawMtlSize)}</td>
                     <td style={styles.cell}>
@@ -832,42 +841,40 @@ const formatItemSizeWithBracket = (itemSize) => {
                 ))}
 
                 {/* Hydro Test Messages */}
-             {/* Hydro Test Messages - Simple version with only full textarea */}
-{/* Hydro Test Messages */}
-{hydroTestMessages.length > 0 && (
-  <tr>
-    <td colSpan="20" style={{ 
-      ...styles.cell, 
-      textAlign: 'left', 
-      padding: '20px 16px', 
-      whiteSpace: 'pre-line', 
-      lineHeight: '1.55',
-      pageBreakInside: 'avoid',
-      breakInside: 'avoid',
-    }}>
-      {hydroTestMessages.map((msgObj, i) => (
-        <div key={i} style={{ marginBottom: i < hydroTestMessages.length - 1 ? '28px' : '0' }}>
-          <input
-            style={{
-              ...styles.inlineInput,
-              width: '100%',
-              fontSize: '11px',
-              border: 'none',
-              background: 'transparent',
-              padding: '2px 4px',
-              margin: 0,
-              textAlign: 'left',
-              outline: 'none',
-              fontFamily: 'inherit'
-            }}
-            value={msgObj.full}
-            onChange={(e) => handleHydroMessagePartChange(i, 'full', e.target.value)}
-          />
-        </div>
-      ))}
-    </td>
-  </tr>
-)}
+                {hydroTestMessages.length > 0 && (
+                  <tr>
+                    <td colSpan="20" style={{
+                      ...styles.cell,
+                      textAlign: 'left',
+                      padding: '20px 16px',
+                      whiteSpace: 'pre-line',
+                      lineHeight: '1.55',
+                      pageBreakInside: 'avoid',
+                      breakInside: 'avoid',
+                    }}>
+                      {hydroTestMessages.map((msgObj, i) => (
+                        <div key={i} style={{ marginBottom: i < hydroTestMessages.length - 1 ? '28px' : '0' }}>
+                          <input
+                            style={{
+                              ...styles.inlineInput,
+                              width: '100%',
+                              fontSize: '11px',
+                              border: 'none',
+                              background: 'transparent',
+                              padding: '2px 4px',
+                              margin: 0,
+                              textAlign: 'left',
+                              outline: 'none',
+                              fontFamily: 'inherit'
+                            }}
+                            value={msgObj.full}
+                            onChange={(e) => handleHydroMessagePartChange(i, 'full', e.target.value)}
+                          />
+                        </div>
+                      ))}
+                    </td>
+                  </tr>
+                )}
 
                 {/* Footer */}
                 <tr>
@@ -888,6 +895,89 @@ const formatItemSizeWithBracket = (itemSize) => {
           </div>
         </div>
       </div>
+
+      {/* ==================== RIGHT SIDE UPLOAD PANEL ==================== */}
+      {items.length > 0 && (
+        <div style={{
+          marginTop: '24px',
+          borderTop: '2px solid #ccc',
+          paddingTop: '20px',
+          width: '1200px',
+          marginLeft: 'auto',
+          marginRight: 'auto'
+        }}>
+          <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 'bold' }}>Material Test Certificate Uploads (PDF)</h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #ddd', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#f4f5f7', borderBottom: '2px solid #ccc' }}>
+                  <th style={{ padding: '10px', textAlign: 'left', borderRight: '1px solid #ddd' }}>PO L/I</th>
+                  <th style={{ padding: '10px', textAlign: 'left', borderRight: '1px solid #ddd' }}>Item & Size</th>
+                  <th style={{ padding: '10px', textAlign: 'left', borderRight: '1px solid #ddd' }}>TC No.</th>
+                  <th style={{ padding: '10px', textAlign: 'center' }}>Upload PDF</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                    <td style={{ padding: '10px', borderRight: '1px solid #ddd', verticalAlign: 'middle' }}>{item.poLi}</td>
+                    <td style={{ padding: '10px', borderRight: '1px solid #ddd', verticalAlign: 'middle' }}>{item.itemSize || '—'}</td>
+                    <td style={{ padding: '10px', borderRight: '1px solid #ddd', verticalAlign: 'middle' }}>{item.tcNo || '—'}</td>
+                    <td style={{ padding: '10px', textAlign: 'center', verticalAlign: 'middle' }}>
+                      {item.tcNo?.trim() ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                          <div
+                            onClick={() => triggerPdfUpload(idx)}
+                            style={{
+                              cursor: 'pointer',
+                              color: '#0052cc',
+                              background: '#ffffff',
+                              border: '2px solid #0052cc',
+                              borderRadius: '6px',
+                              padding: '6px 12px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontSize: '12px',
+                              fontWeight: '600'
+                            }}
+                            title="Upload Material Test Certificate PDF"
+                          >
+                            <Upload size={16} />
+                            Upload PDF
+                          </div>
+
+                          {pdfUploads[idx] && (
+                            <div style={{
+                              fontSize: '11px',
+                              color: '#28a745',
+                              fontWeight: 'bold',
+                              wordBreak: 'break-all',
+                              marginTop: '4px'
+                            }}>
+                              ✓ {pdfUploads[idx].fileName}
+                            </div>
+                          )}
+
+                          <input
+                            type="file"
+                            id={`pdf-upload-${idx}`}
+                            accept="application/pdf"
+                            style={{ display: 'none' }}
+                            onChange={(e) => handlePdfUpload(idx, e)}
+                          />
+                        </div>
+                      ) : (
+                        <small style={{ color: '#888', fontStyle: 'italic' }}>Enter TC No to enable upload</small>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
