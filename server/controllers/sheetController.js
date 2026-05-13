@@ -565,7 +565,101 @@ exports.getRecordByTcNo = async (req, res) => {
 
 
 
-// ==================== CREATE CERTIFICATE ====================
+// exports.createCertificate = async (req, res) => {
+//   const connection = await db.getConnection();
+//   try {
+//     await connection.beginTransaction();
+
+//     console.log("📂 Files received:", req.files ? Object.keys(req.files) : "No files");
+
+//     // Parse payload
+//     let payload;
+//     try {
+//       payload = JSON.parse(req.body.payload);
+//     } catch (e) {
+//       return res.status(400).json({ success: false, error: "Invalid payload" });
+//     }
+
+//     const {
+//       cert_no, cert_date, delivery_note_no, delivery_date, customer_name,
+//       po_no, po_date, items = [], signature = 0, test_line_items = []
+//     } = payload;
+
+//     const validSignature = [0, 1, 2].includes(Number(signature)) ? Number(signature) : 0;
+
+//     // Insert Header
+//     const [headerResult] = await connection.query(
+//       `INSERT INTO certificate_details 
+//        (cert_no, cert_date, delivery_note_no, delivery_date, customer_name, 
+//         po_no, po_date, signature, test_line_items)
+//        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+//       [cert_no, cert_date, delivery_note_no || null, delivery_date || null,
+//        customer_name || null, po_no || null, po_date || null, validSignature,
+//        JSON.stringify(test_line_items)]
+//     );
+
+//     const certificate_id = headerResult.insertId;
+
+//     // Insert Items with Relative File Path
+//     if (items.length > 0) {
+//       const itemValues = items.map((item, index) => {
+//         const fileArray = req.files[`pdf_${index}`];
+//         const file = fileArray && fileArray[0];
+
+//         let filePath = null;
+
+//         if (file) {
+//           // ✅ Store only relative path: uploads/inspection_certificates/filename.pdf
+//           const relativePath = `uploads/inspection_certificates/${file.filename}`;
+//           filePath = relativePath.replace(/\\/g, '/'); // ensure forward slashes
+
+//           console.log(`✅ File saved for index ${index}: ${filePath}`);
+//         }
+
+//         return [
+//           certificate_id,
+//           item.po_lineitem_no || null,
+//           item.item_size || null,
+//           item.raw_material_size || null,
+//           item.tc_no || null,
+//           item.traceability_no || null,
+//           item.qty_pcs || null,
+//           item.material_grade || null,
+//           item.c || null, item.cr || null, item.ni || null,
+//           item.mo || null, item.mn || null, item.si || null,
+//           item.s || null, item.p || null, item.cu || null,
+//           item.fe || null, item.co || null,
+//           filePath  // ← Now stores relative path
+//         ];
+//       });
+
+//       await connection.query(
+//         `INSERT INTO certificate_records (
+//           certificate_id, po_lineitem_no, item_size, raw_material_size,
+//           tc_no, traceability_no, qty_pcs, material_grade,
+//           c, cr, ni, mo, mn, si, s, p, cu, fe, co, inspection_certificate
+//         ) VALUES ?`,
+//         [itemValues]
+//       );
+//     }
+
+//     await connection.commit();
+
+//     res.status(201).json({
+//       success: true,
+//       message: 'Certificate created successfully',
+//       certificateId: certificate_id,
+//     });
+
+//   } catch (error) {
+//     await connection.rollback();
+//     console.error('❌ Create certificate error:', error);
+//     res.status(500).json({ success: false, error: error.message });
+//   } finally {
+//     connection.release();
+//   }
+// };
+
 exports.createCertificate = async (req, res) => {
   const connection = await db.getConnection();
   try {
@@ -573,7 +667,6 @@ exports.createCertificate = async (req, res) => {
 
     console.log("📂 Files received:", req.files ? Object.keys(req.files) : "No files");
 
-    // Parse payload
     let payload;
     try {
       payload = JSON.parse(req.body.payload);
@@ -588,7 +681,50 @@ exports.createCertificate = async (req, res) => {
 
     const validSignature = [0, 1, 2].includes(Number(signature)) ? Number(signature) : 0;
 
-    // Insert Header
+    // ====================== INSERT MISSING TRACEABILITY RECORDS ======================
+    let newRecordsInserted = 0;
+
+    for (const item of items) {
+      const traceability_no = item.traceability_no?.trim();
+      if (!traceability_no) continue;
+
+      const [existing] = await connection.query(
+        `SELECT id FROM records WHERE traceability_no = ? LIMIT 1`,
+        [traceability_no]
+      );
+
+      if (existing.length === 0) {
+        await connection.query(
+          `INSERT INTO records (
+            tc_no, traceability_no, heat_no, size, c, cr, ni, mo, mn, si, s, p, cu, fe, co,
+            material_grade, supplier_number, supplier_name, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+          [
+            item.tc_no || null,
+            traceability_no,
+            null,                    // heat_no → explicitly NULL
+            item.raw_material_size || null,
+            item.c || null,
+            item.cr || null,
+            item.ni || null,
+            item.mo || null,
+            item.mn || null,
+            item.si || null,
+            item.s || null,
+            item.p || null,
+            item.cu || null,
+            item.fe || null,
+            item.co || null,
+            item.material_grade || null,
+            null, // supplier_number
+            null  // supplier_name
+          ]
+        );
+        newRecordsInserted++;
+      }
+    }
+
+    // ====================== INSERT CERTIFICATE HEADER ======================
     const [headerResult] = await connection.query(
       `INSERT INTO certificate_details 
        (cert_no, cert_date, delivery_note_no, delivery_date, customer_name, 
@@ -601,20 +737,16 @@ exports.createCertificate = async (req, res) => {
 
     const certificate_id = headerResult.insertId;
 
-    // Insert Items with Relative File Path
+    // ====================== INSERT CERTIFICATE ITEMS (Fixed) ======================
     if (items.length > 0) {
       const itemValues = items.map((item, index) => {
-        const fileArray = req.files[`pdf_${index}`];
+        const fileArray = req.files?.[`pdf_${index}`];
         const file = fileArray && fileArray[0];
 
         let filePath = null;
-
         if (file) {
-          // ✅ Store only relative path: uploads/inspection_certificates/filename.pdf
           const relativePath = `uploads/inspection_certificates/${file.filename}`;
-          filePath = relativePath.replace(/\\/g, '/'); // ensure forward slashes
-
-          console.log(`✅ File saved for index ${index}: ${filePath}`);
+          filePath = relativePath.replace(/\\/g, '/');
         }
 
         return [
@@ -626,14 +758,22 @@ exports.createCertificate = async (req, res) => {
           item.traceability_no || null,
           item.qty_pcs || null,
           item.material_grade || null,
-          item.c || null, item.cr || null, item.ni || null,
-          item.mo || null, item.mn || null, item.si || null,
-          item.s || null, item.p || null, item.cu || null,
-          item.fe || null, item.co || null,
-          filePath  // ← Now stores relative path
+          item.c || null,
+          item.cr || null,
+          item.ni || null,
+          item.mo || null,
+          item.mn || null,
+          item.si || null,
+          item.s || null,
+          item.p || null,
+          item.cu || null,
+          item.fe || null,
+          item.co || null,
+          filePath   // Can be NULL
         ];
       });
 
+      // ✅ Corrected Query
       await connection.query(
         `INSERT INTO certificate_records (
           certificate_id, po_lineitem_no, item_size, raw_material_size,
@@ -650,16 +790,28 @@ exports.createCertificate = async (req, res) => {
       success: true,
       message: 'Certificate created successfully',
       certificateId: certificate_id,
+      newRecordsInserted,
+      detail: newRecordsInserted > 0 
+        ? `${newRecordsInserted} new traceability record(s) added.` 
+        : 'All traceability numbers already existed.'
     });
 
   } catch (error) {
     await connection.rollback();
     console.error('❌ Create certificate error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      sqlMessage: error.sqlMessage || null 
+    });
   } finally {
     connection.release();
   }
 };
+
+
+
+
 
 // Also update the checkDeliveryNote function (no changes needed, just for reference)
 exports.checkDeliveryNote = async (req, res) => {

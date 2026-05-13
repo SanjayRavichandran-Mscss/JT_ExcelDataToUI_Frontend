@@ -73,8 +73,8 @@ const startServer = async () => {
     console.log(`Inspection certificates directory: ${inspectionCertificatesDir}`);
 
     app.listen(PORT, () => {
-      console.log(`Server running on http://103.118.158.188:${PORT}`);
-      console.log(`Static files available at: http://103.118.158.188:${PORT}/uploads/`);
+      console.log(`Server running on http://136.109.165.80:${PORT}`);
+      console.log(`Static files available at: http://136.109.165.80:${PORT}/uploads/`);
     });
   } catch (error) {
     console.error('Failed to connect to database:', error);

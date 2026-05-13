@@ -30,7 +30,7 @@ const CreateNewSheet = () => {
 
   const fetchNextCertNumber = async () => {
     try {
-      const res = await fetch('http://103.118.158.188:5000/api/sheet/next-cert-number');
+      const res = await fetch('http://136.109.165.80:5000/api/sheet/next-cert-number');
       const json = await res.json();
       if (json.success && json.nextCertNo) {
         setCertNo(json.nextCertNo);
@@ -195,7 +195,7 @@ const CreateNewSheet = () => {
     setPressureLoading(true);
 
     try {
-      const res = await fetch('http://103.118.158.188:5000/api/sheet/pressures/by-sizes', {
+      const res = await fetch('http://136.109.165.80:5000/api/sheet/pressures/by-sizes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sizes }),
@@ -245,7 +245,7 @@ const CreateNewSheet = () => {
       const params = new URLSearchParams();
       traceabilityList.forEach(t => params.append('traceability_nos', t));
 
-      const res = await fetch(`http://103.118.158.188:5000/api/sheet/records/by-traceabilities?${params.toString()}`);
+      const res = await fetch(`http://136.109.165.80:5000/api/sheet/records/by-traceabilities?${params.toString()}`);
       const json = await res.json();
 
       if (json.success && json.records?.length > 0) {
@@ -309,7 +309,7 @@ const CreateNewSheet = () => {
     }
 
     try {
-      const res = await fetch(`http://103.118.158.188:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
+      const res = await fetch(`http://136.109.165.80:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
       const json = await res.json();
 
       if (json.success && json.record) {
@@ -458,6 +458,7 @@ const CreateNewSheet = () => {
     input?.click();
   };
 
+// ====================== NEW: Submit with Traceability Check & Auto Insert ======================
 const handleSubmitCertificate = async () => {
   if (multiSheetData.length === 0) return;
   if (deliveryNoteExists) {
@@ -466,11 +467,11 @@ const handleSubmitCertificate = async () => {
   }
 
   setSubmitLoading(true);
+
   const data = multiSheetData[0];
 
   const formData = new FormData();
 
-  // === Send Main Data as JSON string ===
   const payload = {
     cert_no: certNo,
     cert_date: todayDate,
@@ -505,30 +506,36 @@ const handleSubmitCertificate = async () => {
 
   formData.append('payload', JSON.stringify(payload));
 
-  // === Append PDF Files ===
-  let hasFiles = false;
+  // Append PDF files
   data.items.forEach((item, idx) => {
     const pdfData = pdfUploads[idx];
     if (pdfData?.file) {
       formData.append(`pdf_${idx}`, pdfData.file);
-      hasFiles = true;
-      console.log(`Appending file: pdf_${idx} → ${pdfData.file.name}`);
     }
   });
 
-  console.log(`Total files being sent: ${Object.keys(pdfUploads).length}`);
-
   try {
-    const response = await fetch('http://103.118.158.188:5000/api/sheet/create-certificate', {
+    const response = await fetch('http://136.109.165.80:5000/api/sheet/create-certificate', {
       method: 'POST',
-      body: formData,          // ← Do NOT set Content-Type header
+      body: formData,
     });
 
     const result = await response.json();
 
     if (result.success) {
-      alert('Certificate created successfully with PDFs!');
-      setPdfUploads({});        // Clear after success
+      // Professional Alert
+      let alertMsg = 'Certificate created successfully!';
+      
+      if (result.newRecordsInserted > 0) {
+        alertMsg += `\n\n${result.newRecordsInserted} new traceability record(s) have been added to the master records table.`;
+      } else {
+        alertMsg += `\n\nAll traceability numbers already existed in the master table.`;
+      }
+
+      alert(alertMsg);
+
+      // Reset
+      setPdfUploads({});
       fetchNextCertNumber();
     } else {
       alert('Failed: ' + (result.error || 'Unknown error'));
@@ -551,7 +558,7 @@ const handleSubmitCertificate = async () => {
     setCheckingDeliveryNote(true);
 
     try {
-      const res = await fetch('http://103.118.158.188:5000/api/sheet/check-delivery-note', {
+      const res = await fetch('http://136.109.165.80:5000/api/sheet/check-delivery-note', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ delivery_note_no: deliveryNote.trim() })
