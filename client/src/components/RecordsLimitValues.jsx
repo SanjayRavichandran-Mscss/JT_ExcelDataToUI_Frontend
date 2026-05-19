@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import Select from "react-select";
+import CreatableSelect from "react-select/creatable";
+import Swal from 'sweetalert2';
 
-const API_BASE = "http://136.109.165.80:5000/api/sheet";
+const API_BASE = "http://103.118.158.188:5000/api/sheet";
 
-// Simple icon components (you can replace with react-icons or heroicons)
+// Simple icon components
 const EditIcon = () => (
   <svg
     className="w-4 h-4"
@@ -39,13 +41,33 @@ const DeleteIcon = () => (
   </svg>
 );
 
+const SortIcon = () => (
+  <svg
+    className="w-4 h-4 ml-1 inline-block"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"
+    />
+  </svg>
+);
+
 const RecordsLimitValues = () => {
   const [records, setRecords] = useState([]);
+  const [filteredRecords, setFilteredRecords] = useState([]);
   const [grades, setGrades] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [isCreatingGrade, setIsCreatingGrade] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortOrder, setSortOrder] = useState("desc"); // 'desc' for last added first, 'asc' for first added first
 
   const initialFormData = {
     material_grade_id: "",
@@ -66,12 +88,35 @@ const RecordsLimitValues = () => {
   const [editingId, setEditingId] = useState(null);
   const [formTitle, setFormTitle] = useState("Add New Material Limit");
 
-  const selectRef = useRef(null);
-
   useEffect(() => {
     fetchGrades();
     fetchLimits();
   }, []);
+
+  // Apply filtering and sorting whenever records, searchTerm, or sortOrder changes
+  useEffect(() => {
+    let result = [...records];
+
+    // Apply search filter
+    if (searchTerm.trim()) {
+      result = result.filter(record =>
+        record.material_grade.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Apply sorting (by created_at)
+    result.sort((a, b) => {
+      const dateA = new Date(a.created_at);
+      const dateB = new Date(b.created_at);
+      if (sortOrder === "desc") {
+        return dateB - dateA; // Last added first
+      } else {
+        return dateA - dateB; // First added first
+      }
+    });
+
+    setFilteredRecords(result);
+  }, [records, searchTerm, sortOrder]);
 
   const fetchGrades = async () => {
     try {
@@ -91,6 +136,12 @@ const RecordsLimitValues = () => {
     } catch (err) {
       console.error("Failed to load limits:", err);
       setError("Failed to load material limits. Please try again.");
+      await Swal.fire({
+        icon: 'error',
+        title: 'Error!',
+        text: 'Failed to load material limits. Please try again.',
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setLoading(false);
     }
@@ -99,6 +150,100 @@ const RecordsLimitValues = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // Get already used grade IDs from records
+  const usedGradeIds = new Set(records.map(record => record.material_grade_id));
+
+  // Prepare options for Select with disabled state
+  const options = grades.map((g) => ({
+    value: g.id,
+    label: g.material_grade,
+    isDisabled: usedGradeIds.has(g.id)
+  }));
+
+  const selectedOption = options.find(
+    (opt) => opt.value === formData.material_grade_id
+  ) || null;
+
+  // Handle creating a new material grade
+  const handleCreateGrade = async (inputValue) => {
+    if (!inputValue || !inputValue.trim()) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Invalid Input',
+        text: 'Please enter a valid material grade name',
+        confirmButtonColor: '#6366f1'
+      });
+      return null;
+    }
+
+    // Check if grade already exists in the list
+    const existingGrade = grades.find(
+      g => g.material_grade.toLowerCase() === inputValue.toLowerCase()
+    );
+    
+    if (existingGrade) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Already Exists',
+        text: `Material grade "${inputValue}" already exists`,
+        confirmButtonColor: '#6366f1'
+      });
+      return null;
+    }
+
+    setIsCreatingGrade(true);
+    setError(null);
+
+    try {
+      const response = await axios.post(`${API_BASE}/material-grades`, {
+        material_grade: inputValue.trim()
+      });
+
+      if (response.data.success) {
+        const newGrade = response.data.data;
+        await fetchGrades();
+        
+        await Swal.fire({
+          icon: 'success',
+          title: 'Created!',
+          text: `Material grade "${inputValue}" created successfully!`,
+          timer: 1500,
+          showConfirmButton: false
+        });
+        
+        return {
+          value: newGrade.id,
+          label: newGrade.material_grade,
+          isDisabled: false
+        };
+      }
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || "Failed to create material grade";
+      setError(errorMsg);
+      await Swal.fire({
+        icon: 'error',
+        title: 'Creation Failed',
+        text: errorMsg,
+        confirmButtonColor: '#6366f1'
+      });
+      return null;
+    } finally {
+      setIsCreatingGrade(false);
+    }
+  };
+
+  // Handle custom option creation
+  const handleCreateOption = async (inputValue) => {
+    const newOption = await handleCreateGrade(inputValue);
+    if (newOption) {
+      setFormData((prev) => ({
+        ...prev,
+        material_grade_id: newOption.value
+      }));
+    }
+    return newOption;
   };
 
   const openModal = (isEdit = false, rec = null) => {
@@ -141,6 +286,12 @@ const RecordsLimitValues = () => {
     e.preventDefault();
     if (!formData.material_grade_id) {
       setError("Please select a Material Grade");
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Missing Field',
+        text: 'Please select a Material Grade',
+        confirmButtonColor: '#6366f1'
+      });
       return;
     }
 
@@ -149,54 +300,103 @@ const RecordsLimitValues = () => {
     try {
       if (editingId) {
         await axios.put(`${API_BASE}/limits/${editingId}`, formData);
-        alert("Material limit updated successfully!");
+        await Swal.fire({
+          icon: 'success',
+          title: 'Updated!',
+          text: 'Material limit updated successfully!',
+          timer: 1500,
+          showConfirmButton: false
+        });
       } else {
         await axios.post(`${API_BASE}/limits`, formData);
-        alert("Material limit created successfully!");
+        await Swal.fire({
+          icon: 'success',
+          title: 'Created!',
+          text: 'Material limit created successfully!',
+          timer: 1500,
+          showConfirmButton: false
+        });
       }
       closeModal();
-      fetchLimits();
+      await fetchLimits();
     } catch (err) {
       const msg = err.response?.data?.message || "Operation failed. Please try again.";
       setError(msg);
+      await Swal.fire({
+        icon: 'error',
+        title: 'Operation Failed',
+        text: msg,
+        confirmButtonColor: '#6366f1'
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this material limit?")) return;
+  const handleDelete = async (id, materialGrade) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: `You are about to delete material limit for "${materialGrade}". This action cannot be undone!`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel'
+    });
 
-    try {
-      await axios.delete(`${API_BASE}/limits/${id}`);
-      alert("Deleted successfully");
-      fetchLimits();
-    } catch (err) {
-      alert("Failed to delete: " + (err.response?.data?.message || err.message));
+    if (result.isConfirmed) {
+      try {
+        await axios.delete(`${API_BASE}/limits/${id}`);
+        await Swal.fire({
+          icon: 'success',
+          title: 'Deleted!',
+          text: 'Material limit deleted successfully!',
+          timer: 1500,
+          showConfirmButton: false
+        });
+        await fetchLimits();
+      } catch (err) {
+        await Swal.fire({
+          icon: 'error',
+          title: 'Delete Failed',
+          text: err.response?.data?.message || 'Failed to delete material limit',
+          confirmButtonColor: '#6366f1'
+        });
+      }
     }
   };
 
-  const options = grades.map((g) => ({
-    value: g.id,
-    label: g.material_grade,
-  }));
-
-  const selectedOption = options.find(
-    (opt) => opt.value === formData.material_grade_id
-  ) || null;
-
-  const handleFocus = () => {
-    if (selectRef.current) {
-      const input = selectRef.current.querySelector("input");
-      if (input) input.select();
+  // Custom format for option labels
+  const formatOptionLabel = (option, { context }) => {
+    if (option.isDisabled) {
+      return (
+        <div className="flex items-center justify-between w-full">
+          <span className="text-gray-400">{option.label}</span>
+          <span className="text-xs text-gray-400 italic">(Already used)</span>
+        </div>
+      );
     }
+    return option.label;
+  };
+
+  const handleSortToggle = () => {
+    setSortOrder(sortOrder === "desc" ? "asc" : "desc");
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const clearSearch = () => {
+    setSearchTerm("");
   };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
               Material Specification Limits
@@ -214,14 +414,70 @@ const RecordsLimitValues = () => {
           </button>
         </div>
 
+        {/* Search and Filter Bar */}
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div className="relative flex-1 w-full">
+              <input
+                type="text"
+                placeholder="Search by material grade..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+              />
+              {searchTerm && (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={handleSortToggle}
+                className="inline-flex items-center px-4 py-2.5 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition border border-gray-300"
+              >
+                <SortIcon />
+                <span className="ml-2">
+                  {sortOrder === "desc" ? "Last Added First" : "First Added First"}
+                </span>
+              </button>
+              
+              {searchTerm && (
+                <div className="text-sm text-gray-600 self-center">
+                  Found {filteredRecords.length} result(s)
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Table Card */}
         <div className="bg-white shadow-lg rounded-2xl overflow-hidden border border-gray-200">
           {loading ? (
             <div className="py-20 text-center text-gray-500 text-lg">Loading limits...</div>
-          ) : records.length === 0 ? (
+          ) : filteredRecords.length === 0 ? (
             <div className="py-20 text-center text-gray-600">
-              <p className="text-xl font-medium">No material limits found</p>
-              <p className="mt-2">Click "Add New Limit" to create your first entry</p>
+              {searchTerm ? (
+                <>
+                  <p className="text-xl font-medium">No matching material limits found</p>
+                  <p className="mt-2">Try a different search term or clear the filter</p>
+                  <button
+                    onClick={clearSearch}
+                    className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                  >
+                    Clear Search
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-xl font-medium">No material limits found</p>
+                  <p className="mt-2">Click "Add New Limit" to create your first entry</p>
+                </>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -258,10 +514,15 @@ const RecordsLimitValues = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {records.map((r) => (
+                  {filteredRecords.map((r) => (
                     <tr key={r.id} className="hover:bg-indigo-50/30 transition-colors">
                       <td className="px-6 py-4 font-medium text-gray-900 sticky left-0 bg-white z-10 whitespace-nowrap">
                         {r.material_grade}
+                        {r.created_at && (
+                          <span className="block text-xs text-gray-400 mt-1">
+                            {/* Added: {new Date(r.created_at).toLocaleDateString()} */}
+                          </span>
+                        )}
                       </td>
 
                       <td className="px-3 py-4 text-center text-sm border-l">{r.c_min  || "—"}</td>
@@ -298,7 +559,7 @@ const RecordsLimitValues = () => {
                         </button>
 
                         <button
-                          onClick={() => handleDelete(r.id)}
+                          onClick={() => handleDelete(r.id, r.material_grade)}
                           className="inline-flex items-center gap-1.5 text-red-600 hover:text-red-800 font-medium transition px-3 py-1.5 rounded-lg hover:bg-red-50 ml-2"
                           title="Delete this limit"
                         >
@@ -345,13 +606,12 @@ const RecordsLimitValues = () => {
             {/* Form */}
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8">
               <div className="space-y-10">
-                {/* Material Grade */}
+                {/* Material Grade with CreatableSelect */}
                 <div>
                   <label className="block text-base font-semibold text-gray-800 mb-2">
                     Material Grade <span className="text-red-500">*</span>
                   </label>
-                  <Select
-                    ref={selectRef}
+                  <CreatableSelect
                     options={options}
                     value={selectedOption}
                     onChange={(selected) =>
@@ -360,14 +620,17 @@ const RecordsLimitValues = () => {
                         material_grade_id: selected ? selected.value : "",
                       }))
                     }
-                    placeholder="Search or select material grade..."
+                    onCreateOption={handleCreateOption}
+                    placeholder="Search, select or type new material grade..."
                     isSearchable
                     isClearable
-                    isDisabled={submitting}
-                    onFocus={handleFocus}
+                    isDisabled={submitting || isCreatingGrade}
+                    formatOptionLabel={formatOptionLabel}
+                    isLoading={isCreatingGrade}
+                    loadingMessage={() => "Creating grade..."}
+                    noOptionsMessage={() => "Type to create new grade"}
                     className="react-select-container"
                     classNamePrefix="react-select"
-                    noOptionsMessage={() => "No grades found"}
                     styles={{
                       control: (base, state) => ({
                         ...base,
@@ -393,10 +656,15 @@ const RecordsLimitValues = () => {
                           : state.isFocused
                           ? "#eef2ff"
                           : "white",
-                        color: state.isSelected ? "white" : "#1f2937",
+                        color: state.isDisabled ? "#9ca3af" : state.isSelected ? "white" : "#1f2937",
+                        cursor: state.isDisabled ? "not-allowed" : "pointer",
+                        opacity: state.isDisabled ? 0.6 : 1,
                       }),
                     }}
                   />
+                  <p className="mt-2 text-xs text-gray-500">
+                    Tip: Type a new grade name and press Enter to create it
+                  </p>
                 </div>
 
                 {/* Chemical Elements Grid */}
@@ -467,9 +735,9 @@ const RecordsLimitValues = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || isCreatingGrade}
                   className={`px-10 py-3 rounded-xl text-white font-medium shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition ${
-                    submitting
+                    (submitting || isCreatingGrade)
                       ? "bg-indigo-400 cursor-not-allowed"
                       : "bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500"
                   }`}

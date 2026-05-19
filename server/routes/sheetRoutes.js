@@ -14,6 +14,7 @@ const {
   getCertificateById,
   updateCertificate,
   deleteCertificate,
+  createMaterialGrade,
   createLimit,
   getAllLimits,
   updateLimit,
@@ -29,7 +30,9 @@ const {
   getPressuresBySizes,
   checkDuplicateDeliveryNote,
   getInspectionCertificatesByCertId,
-  upload
+  upload,
+  uploadExcel
+  
 } = require('../controllers/sheetController');
 
 // Dynamic fields for multiple PDFs
@@ -62,9 +65,8 @@ router.post('/create-certificate',
 );
 
 // ─── Bulk Excel Routes ───────────────────────────────────────────
-router.post('/bulk-validate', upload.single('file'), bulkValidateExcel);
-router.post('/bulk-records', upload.single('file'), bulkuploadrecords);
-
+router.post('/bulk-validate', uploadExcel.single('file'), bulkValidateExcel);
+router.post('/bulk-records', uploadExcel.single('file'), bulkuploadrecords);
 // ─── Other Routes ────────────────────────────────────────────────
 router.get('/get-all-certificates', getAllCertificates);
 router.get('/get-certificate/:id', getCertificateById);
@@ -72,6 +74,9 @@ router.put('/update-certificate/:id', updateCertificate);
 router.delete('/delete-certificate/:id', deleteCertificate);
 
 router.post('/check-delivery-note', checkDuplicateDeliveryNote);
+
+
+router.post('/material-grades', createMaterialGrade);  // Add this line
 
 router.get('/material-grades', getMaterialGrades);
 router.post('/limits', createLimit);

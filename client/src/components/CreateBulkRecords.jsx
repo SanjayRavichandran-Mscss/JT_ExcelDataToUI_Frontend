@@ -1,8 +1,7 @@
-// CreateBulkRecords.jsx
-import React, { useState, useRef, useEffect } from 'react';
-import { Upload, X, Loader2, Download } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Upload, X, Loader2, Download, CheckCircle, AlertCircle } from 'lucide-react';
 
-const API_BASE = 'http://136.109.165.80:5000/api/sheet';
+const API_BASE = 'http://103.118.158.188:5000/api/sheet';   // Change back to your IP
 
 const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) => {
   const [bulkFile, setBulkFile] = useState(null);
@@ -19,7 +18,6 @@ const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) =>
   const [message, setMessage] = useState({ text: '', type: '' });
 
   const fileInputRef = useRef(null);
-  const chemicalComponents = ['c', 'cr', 'ni', 'mo', 'mn', 'si', 's', 'p', 'cu', 'fe', 'co'];
 
   // Download Template
   const downloadTemplate = () => {
@@ -37,18 +35,36 @@ const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) =>
     }
   };
 
-  // Handle File Selection + Validation
+  const parseErrorMessage = (msg) => {
+    if (!msg || typeof msg !== 'string') return { missing: [], outOfRange: [] };
+    const missing = [];
+    const outOfRange = [];
+    const parts = msg.split('|').map(p => p.trim());
+    
+    parts.forEach(part => {
+      if (part.toLowerCase().includes('required')) {
+        const match = part.match(/([A-Za-z\s_]+?)(?:\s+is)?\s+required/i);
+        if (match?.[1]) missing.push(match[1].trim());
+      } else {
+        outOfRange.push(part);
+      }
+    });
+    return { missing, outOfRange };
+  };
+
+  // Main File Handler
   const handleFileSelected = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Reset everything
     setBulkFile(file);
     setValidationResults([]);
     setDuplicateErrors([]);
     setAllRowsValid(false);
     setValidationSummary({ total: 0, valid: 0, invalid: 0 });
-    setBulkValidating(true);
     setMessage({ text: '', type: '' });
+    setBulkValidating(true);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -61,7 +77,15 @@ const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) =>
 
       const data = await res.json();
 
-      if (res.ok && data.success) {
+      if (!res.ok) {
+        setMessage({ 
+          text: data.message || `Server Error (${res.status}): ${data.error || 'Check server logs'}`,
+          type: 'error' 
+        });
+        return;
+      }
+
+      if (data.success) {
         const processed = (data.validationResults || []).map(r => ({
           ...r,
           rowData: r.rowData || {}
@@ -69,47 +93,49 @@ const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) =>
 
         setValidationResults(processed);
 
-        const formatInvalidCount = processed.filter(r => r.message?.trim()).length;
+        const invalidCount = processed.filter(r => r.message?.trim()).length;
 
         setValidationSummary({
           total: data.totalRows || processed.length,
-          valid: data.validCount || processed.length - formatInvalidCount,
-          invalid: data.invalidCount || formatInvalidCount
+          valid: data.validCount || processed.length - invalidCount,
+          invalid: invalidCount
         });
 
-        if (formatInvalidCount > 0) {
+        if (invalidCount === 0) {
+          const traceabilityList = processed
+            .map(r => r.rowData?.traceability_no?.trim())
+            .filter(Boolean);
+
+          if (traceabilityList.length > 0) {
+            await checkBulkTraceabilityUniqueness(traceabilityList, processed);
+          } else {
+            setAllRowsValid(true);
+            setMessage({ text: '✓ All rows are valid and ready to import!', type: 'success' });
+          }
+        } else {
           setAllRowsValid(false);
-          return;
+          setMessage({ text: `✗ Found ${invalidCount} invalid row(s)`, type: 'error' });
         }
-
-        // Check traceability uniqueness
-        const traceabilityList = processed
-          .filter(r => !r.message?.trim())
-          .map(r => r.rowData?.traceability_no || '')
-          .filter(Boolean);
-
-        if (traceabilityList.length === 0) {
-          setAllRowsValid(true);
-          return;
-        }
-
-        await checkBulkTraceabilityUniqueness(traceabilityList, processed);
       } else {
         setMessage({ text: data.message || 'Validation failed', type: 'error' });
       }
     } catch (err) {
-      setMessage({ text: 'Failed to validate file', type: 'error' });
+      console.error('Frontend Error:', err);
+      setMessage({ 
+        text: 'Failed to connect to server or network error occurred', 
+        type: 'error' 
+      });
     } finally {
       setBulkValidating(false);
     }
   };
 
-  const checkBulkTraceabilityUniqueness = async (nos, processedRows) => {
+  const checkBulkTraceabilityUniqueness = async (traceabilityNos, processedRows) => {
     try {
       const res = await fetch(`${API_BASE}/check-traceability-bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ traceability_nos: nos })
+        body: JSON.stringify({ traceability_nos: traceabilityNos })
       });
 
       const data = await res.json();
@@ -124,15 +150,19 @@ const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) =>
             dupErrors.push({
               row: row.row || (idx + 2),
               value: trNo,
-              message: `Duplicate traceability_no: ${trNo} already exists`
             });
           }
         });
 
         setDuplicateErrors(dupErrors);
-        setAllRowsValid(dupErrors.length === 0);
-      } else {
-        setAllRowsValid(false);
+        const isValid = dupErrors.length === 0;
+        setAllRowsValid(isValid);
+
+        if (isValid) {
+          setMessage({ text: '✓ All rows are valid and unique — Ready to import!', type: 'success' });
+        } else {
+          setMessage({ text: `${dupErrors.length} duplicate traceability number(s) found`, type: 'error' });
+        }
       }
     } catch (err) {
       console.error(err);
@@ -140,7 +170,6 @@ const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) =>
     }
   };
 
-  // Bulk Upload
   const handleBulkUpload = async () => {
     if (!bulkFile || !allRowsValid) return;
 
@@ -158,18 +187,18 @@ const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) =>
 
       if (res.ok && data.success) {
         setMessage({
-          text: `Imported ${data.insertedCount || 0} record(s) successfully`,
+          text: data.message || `Successfully imported ${data.insertedCount || 0} record(s)`,
           type: 'success'
         });
-        onRecordsAdded();
-        // Reset
-        setBulkFile(null);
-        setValidationResults([]);
-        setDuplicateErrors([]);
-        setAllRowsValid(false);
-        setValidationSummary({ total: 0, valid: 0, invalid: 0 });
+        setTimeout(() => {
+          onRecordsAdded();
+          onClose();
+        }, 1500);
       } else {
-        setMessage({ text: data.message || 'Upload failed', type: 'error' });
+        setMessage({ 
+          text: data.message || data.error || 'Upload failed', 
+          type: 'error' 
+        });
       }
     } catch (err) {
       setMessage({ text: 'Network error during upload', type: 'error' });
@@ -178,59 +207,45 @@ const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) =>
     }
   };
 
-  const parseErrorMessage = (msg) => {
-    if (!msg || typeof msg !== 'string') return { missing: [], outOfRange: [] };
-    const missing = [];
-    const outOfRange = [];
-    msg.split('|').map(p => p.trim()).forEach(part => {
-      if (part.toLowerCase().includes('required')) {
-        const m = part.match(/([A-Za-z\s_]+?)(?:\s+is)?\s+required/i);
-        if (m?.[1]) missing.push(m[1].trim());
-      } else if (part.includes('outside') || part.includes('out of range')) {
-        const m = part.match(/([A-Za-z]+):\s*([\d.]+)\s*(?:is )?outside.*\(([\d.-]+)\s*[-–—]\s*([\d.-]+)\)/i);
-        if (m) {
-          outOfRange.push({
-            comp: m[1].toUpperCase(),
-            value: m[2],
-            min: m[3],
-            max: m[4]
-          });
-        }
-      }
-    });
-    return { missing, outOfRange };
+  const clearAll = () => {
+    setBulkFile(null);
+    setValidationResults([]);
+    setDuplicateErrors([]);
+    setAllRowsValid(false);
+    setValidationSummary({ total: 0, valid: 0, invalid: 0 });
+    setMessage({ text: '', type: '' });
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   return (
-    <div className="p-6 md:p-10 space-y-10">
-      <div className="flex justify-between items-center pb-4 border-b">
+    <div className="p-6 md:p-10 space-y-10 max-h-[90vh] overflow-y-auto">
+      <div className="flex justify-between items-center pb-4 border-b sticky top-0 bg-white z-10">
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
           Bulk Upload Test Certificates
         </h2>
-        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
+        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
           <X size={28} className="text-gray-600 hover:text-black" />
         </button>
       </div>
 
       {message.text && (
-        <div className={`p-4 border-l-4 rounded-r-lg font-medium ${
-          message.type === 'success' ? 'bg-green-50 border-green-600 text-green-800' : 'bg-red-50 border-red-600 text-red-800'
+        <div className={`p-4 border-l-4 rounded-r-lg font-medium flex items-center gap-3 ${
+          message.type === 'success' ? 'bg-green-50 border-green-600 text-green-800' 
+                                   : 'bg-red-50 border-red-600 text-red-800'
         }`}>
+          {message.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
           {message.text}
         </div>
       )}
 
       <div className="text-center">
-        <button
-          onClick={downloadTemplate}
-          className="inline-flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white px-6 py-3 rounded-lg font-medium shadow transition"
-        >
+        <button onClick={downloadTemplate} className="inline-flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white px-6 py-3 rounded-lg font-medium shadow transition">
           <Download size={20} /> Download Template (.xlsx)
         </button>
       </div>
 
       {/* Upload Area */}
-      <div className="border-2 border-dashed border-gray-300 rounded-2xl p-12 text-center bg-gray-50">
+      <div className="border-2 border-dashed border-gray-300 rounded-2xl p-12 text-center bg-gray-50 hover:border-blue-400 transition">
         <Upload size={72} className="mx-auto text-gray-400 mb-6" />
         <p className="text-2xl font-medium mb-2">Drop your file here or click to browse</p>
         <p className="text-gray-500 mb-8">Only .xlsx and .xls files are supported</p>
@@ -247,7 +262,7 @@ const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) =>
           onClick={() => fileInputRef.current?.click()}
           disabled={bulkValidating}
           className={`px-12 py-5 rounded-xl text-white font-bold text-lg shadow-md transition min-w-[280px] ${
-            bulkValidating ? 'bg-gray-400 cursor-wait' : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+            bulkValidating ? 'bg-gray-400 cursor-wait' : 'bg-blue-600 hover:bg-blue-700'
           }`}
         >
           {bulkValidating ? (
@@ -261,132 +276,49 @@ const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) =>
 
         {bulkFile && (
           <div className="mt-6 text-lg font-medium text-green-700">
-            File selected: <span className="font-bold">{bulkFile.name}</span>
+            Selected: <span className="font-bold">{bulkFile.name}</span>
           </div>
         )}
       </div>
 
-      {/* Validation Results */}
-      {(validationResults.length > 0 || duplicateErrors.length > 0) && (
-        <div className="space-y-8">
-          <div className="bg-gray-50 p-6 rounded-xl border">
-            <h3 className="text-xl font-bold mb-4">Validation Summary</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
-              <div>
-                <p className="text-gray-600">Total rows</p>
-                <p className="text-3xl font-bold">{validationSummary.total}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Format Valid</p>
-                <p className={`text-3xl font-bold ${validationSummary.invalid > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                  {validationSummary.valid}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-600">Unique Traceability</p>
-                <p className={`text-3xl font-bold ${duplicateErrors.length > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                  {validationSummary.total - duplicateErrors.length}
-                </p>
-              </div>
+      {/* Validation Summary */}
+      {validationResults.length > 0 && (
+        <div className="bg-gray-50 p-6 rounded-xl border">
+          <h3 className="text-xl font-bold mb-4">Validation Summary</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <p className="text-gray-600 text-sm">Total Rows</p>
+              <p className="text-3xl font-bold">{validationSummary.total}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <p className="text-gray-600 text-sm">Valid</p>
+              <p className="text-3xl font-bold text-green-600">{validationSummary.valid}</p>
+            </div>
+            <div className="bg-white p-4 rounded-lg shadow-sm">
+              <p className="text-gray-600 text-sm">Invalid</p>
+              <p className="text-3xl font-bold text-red-600">{validationSummary.invalid}</p>
             </div>
           </div>
-
-          {/* Format/Range Errors */}
-          {validationResults.map((item, idx) => {
-            if (!item.message?.trim()) return null;
-            const { missing, outOfRange } = parseErrorMessage(item.message);
-
-            return (
-              <div key={`format-${idx}`} className="border rounded-lg overflow-hidden bg-red-50/30">
-                <div className="px-6 py-4 bg-red-50 flex justify-between items-center">
-                  <h4 className="font-bold text-lg text-red-900">Row {item.row || (idx + 2)} — Error</h4>
-                  <span className="px-4 py-1.5 bg-red-600 text-white rounded-full text-sm font-semibold">INVALID</span>
-                </div>
-                <div className="p-6">
-                  {missing.length > 0 && (
-                    <div className="mb-6">
-                      <p className="font-semibold text-red-800 mb-2">Missing required fields:</p>
-                      <ul className="list-disc pl-6 space-y-1 text-red-700">
-                        {missing.map((f, i) => <li key={i}>{f}</li>)}
-                      </ul>
-                    </div>
-                  )}
-                  {outOfRange.length > 0 && (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-gray-100">
-                          <tr>
-                            <th className="px-4 py-3 text-left">Component</th>
-                            <th className="px-4 py-3 text-left">Your Value</th>
-                            <th className="px-4 py-3 text-left">Allowed Range</th>
-                            <th className="px-4 py-3 text-center w-20">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {outOfRange.map((err, i) => (
-                            <tr key={i}>
-                              <td className="px-4 py-3 font-medium uppercase">{err.comp}</td>
-                              <td className="px-4 py-3 font-mono">{err.value}</td>
-                              <td className="px-4 py-3 font-mono text-gray-700">{err.min} – {err.max}</td>
-                              <td className="px-4 py-3 text-center text-2xl text-red-600 font-black">✗</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Duplicate Errors */}
-          {duplicateErrors.map((err, idx) => (
-            <div key={`dup-${idx}`} className="border rounded-lg overflow-hidden bg-orange-50/40">
-              <div className="px-6 py-4 bg-orange-50 flex justify-between items-center">
-                <h4 className="font-bold text-lg text-orange-900">Row {err.row} — Duplicate</h4>
-                <span className="px-4 py-1.5 bg-orange-600 text-white rounded-full text-sm font-semibold">DUPLICATE</span>
-              </div>
-              <div className="p-6 text-orange-800">
-                <p>Traceability No <strong className="font-mono">{err.value}</strong> already exists.</p>
-              </div>
-            </div>
-          ))}
-
-          {validationResults.every(r => !r.message?.trim()) && duplicateErrors.length === 0 && (
-            <div className="text-center py-12 text-2xl font-bold text-green-700 bg-green-50 rounded-xl border border-green-200">
-              ✓ All rows are valid and unique — Ready to import!
-            </div>
-          )}
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-4 justify-end pt-6 border-t">
-        <button
-          onClick={() => {
-            setBulkFile(null);
-            setValidationResults([]);
-            setDuplicateErrors([]);
-            setAllRowsValid(false);
-            setValidationSummary({ total: 0, valid: 0, invalid: 0 });
-            setMessage({ text: '', type: '' });
-          }}
-          className="px-8 py-3 border border-gray-400 rounded-lg hover:bg-gray-100"
-        >
+      {/* Action Buttons */}
+      <div className="flex flex-col sm:flex-row gap-4 justify-end pt-6 border-t sticky bottom-0 bg-white py-4">
+        <button onClick={clearAll} className="px-8 py-3 border border-gray-400 rounded-lg hover:bg-gray-100">
           Clear All
         </button>
 
         <button
           onClick={handleBulkUpload}
           disabled={bulkUploading || !allRowsValid || !bulkFile}
-          className={`min-w-[260px] py-3.5 rounded-xl font-bold text-lg flex items-center justify-center gap-3 ${
+          className={`min-w-[260px] py-3.5 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition ${
             allRowsValid && bulkFile && !bulkUploading
               ? 'bg-green-600 hover:bg-green-700 text-white'
               : 'bg-gray-400 text-white cursor-not-allowed'
           }`}
         >
           {bulkUploading && <Loader2 className="animate-spin" size={24} />}
-          {allRowsValid ? 'Upload Valid Records' : 'Fix Errors First'}
+          {bulkUploading ? 'Uploading...' : allRowsValid ? 'Upload Valid Records' : 'Fix Errors First'}
         </button>
       </div>
     </div>
@@ -394,3 +326,4 @@ const CreateBulkRecords = ({ onClose = () => {}, onRecordsAdded = () => {} }) =>
 };
 
 export default CreateBulkRecords;
+

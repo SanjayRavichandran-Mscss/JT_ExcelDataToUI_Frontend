@@ -81,7 +81,7 @@ const DailyTargetTracker = () => {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://136.109.165.80:5000/api/dashboard/stats', {
+      const response = await axios.get('http://103.118.158.188:5000/api/dashboard/stats', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -135,7 +135,7 @@ const DailyTargetTracker = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post('http://136.109.165.80:5000/api/dashboard/save', {
+      const response = await axios.post('http://103.118.158.188:5000/api/dashboard/save', {
         selected_date: selectedDateStr,
         target_count: targetVal,
       }, {
@@ -472,7 +472,7 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://136.109.165.80:5000/api/dashboard/data', {
+      const response = await axios.get('http://103.118.158.188:5000/api/dashboard/data', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.data.success) setDashboardData(response.data.data);

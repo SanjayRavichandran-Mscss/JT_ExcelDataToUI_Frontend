@@ -9,17 +9,21 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// ==================== UNIVERSAL MULTER (PDF + EXCEL) ====================
-const storage = multer.diskStorage({
+// ==================== HYBRID MULTER CONFIG ====================
+
+// Memory Storage for Excel (Required for buffer)
+const memoryStorage = multer.memoryStorage();
+
+// Disk Storage for PDFs (Your original logic - unchanged)
+const diskStorage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // You can route Excel to a different folder if you want
     const isExcel = file.originalname.match(/\.(xlsx|xls)$/i);
     if (isExcel) {
       const excelDir = path.join(__dirname, '../uploads/excel');
       if (!fs.existsSync(excelDir)) fs.mkdirSync(excelDir, { recursive: true });
       cb(null, excelDir);
     } else {
-      cb(null, uploadDir);   // PDFs go to inspection_certificates
+      cb(null, uploadDir);   // PDFs
     }
   },
   filename: function (req, file, cb) {
@@ -33,48 +37,46 @@ const storage = multer.diskStorage({
     const timestamp = Date.now();
 
     let uniqueFilename;
-
     if (file.originalname.match(/\.(xlsx|xls)$/i)) {
       uniqueFilename = `bulk_${originalName}_${dateStr}_${timestamp}${path.extname(file.originalname)}`;
     } else {
       uniqueFilename = `${originalName}_${dateStr}_${timestamp}.pdf`;
     }
-
     cb(null, uniqueFilename);
   }
 });
 
-// Enhanced File Filter - Supports both PDF and Excel
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
   const mimetype = file.mimetype;
 
-  // Allow PDFs
   if (mimetype === 'application/pdf' || ext === '.pdf') {
     return cb(null, true);
   }
 
-  // Allow Excel files
   if (
-    mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || // .xlsx
-    mimetype === 'application/vnd.ms-excel' ||                                       // .xls
-    ext === '.xlsx' ||
-    ext === '.xls'
+    mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    mimetype === 'application/vnd.ms-excel' ||
+    ext === '.xlsx' || ext === '.xls'
   ) {
     return cb(null, true);
   }
 
-  // Reject everything else
   cb(new Error('Only PDF and Excel (.xlsx, .xls) files are allowed'), false);
 };
 
-// Export the updated multer
+// Export Two Multers
 exports.upload = multer({ 
-  storage: storage,
+  storage: diskStorage,           // For PDF certificates (unchanged)
   fileFilter: fileFilter,
-  limits: { fileSize: 25 * 1024 * 1024 } // Increased to 25MB (good for Excel)
+  limits: { fileSize: 25 * 1024 * 1024 }
 });
 
+exports.uploadExcel = multer({ 
+  storage: memoryStorage,         // ← Important for Excel (gives buffer)
+  fileFilter: fileFilter,
+  limits: { fileSize: 25 * 1024 * 1024 }
+});
 exports.testSheet = async (req, res) => {
   try {
     // Optional: you can test DB connection here
@@ -1220,6 +1222,61 @@ exports.getMaterialGrades = async (req, res) => {
 };
 
 // ==================== RECORDS MIN-MAX LIMITS ====================
+
+// Add this function to your sheetController.js
+// ==================== CREATE NEW MATERIAL GRADE ====================
+exports.createMaterialGrade = async (req, res) => {
+  try {
+    const { material_grade } = req.body;
+
+    if (!material_grade || !material_grade.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Material grade name is required"
+      });
+    }
+
+    // Check if grade already exists
+    const [existing] = await db.query(
+      "SELECT id FROM material_grade_master WHERE material_grade = ?",
+      [material_grade.trim()]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Material grade already exists"
+      });
+    }
+
+    // Insert new grade
+    const [result] = await db.query(
+      "INSERT INTO material_grade_master (material_grade) VALUES (?)",
+      [material_grade.trim()]
+    );
+
+    // Fetch the newly created grade
+    const [newGrade] = await db.query(
+      "SELECT id, material_grade, created_at, updated_at FROM material_grade_master WHERE id = ?",
+      [result.insertId]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Material grade created successfully",
+      data: newGrade[0]
+    });
+  } catch (error) {
+    console.error('Create material grade error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create material grade',
+      error: error.message
+    });
+  }
+};
+
+
 exports.createLimit = async (req, res) => {
   try {
     const {
@@ -1492,389 +1549,312 @@ exports.getLimitsByMaterialGrade = async (req, res) => {
 };
 
 
+
+// ──────────────────────────────────────────────
+// BULK VALIDATE EXCEL - WITH ROW VALUES IN CONSOLE
+// ──────────────────────────────────────────────
 exports.bulkValidateExcel = async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    console.log("=== BULK VALIDATE REQUEST START ===");
+    console.log("File Received:", req.file ? "YES" : "NO");
+
+    if (req.file) {
+      console.log("File Name:", req.file.originalname);
+      console.log("File Size:", req.file.size);
+      console.log("Mimetype:", req.file.mimetype);
+      console.log("Has Buffer:", !!req.file.buffer);
     }
 
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('records')) || workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
+    if (!req.file || !req.file.buffer) {
+      console.log("❌ ERROR: No file or buffer missing");
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No file uploaded or buffer missing.' 
+      });
+    }
 
-    const rawRows = XLSX.utils.sheet_to_json(worksheet, {
-      header: 1,
-      defval: '',
+    console.log("✅ Buffer received. Loading Excel file...");
+
+    const XLSX = require('xlsx');
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+
+    console.log("✅ Workbook loaded successfully. Sheets:", workbook.SheetNames);
+
+    const recordsSheetName = workbook.SheetNames.find(name => 
+      name.toLowerCase() === 'records') || workbook.SheetNames[0];
+
+    const worksheet = workbook.Sheets[recordsSheetName];
+    if (!worksheet) {
+      return res.status(400).json({ success: false, message: 'Records sheet not found' });
+    }
+
+    const recordsData = XLSX.utils.sheet_to_json(worksheet, { 
+      header: 1, 
+      defval: null,
+      raw: false,
       blankrows: false
     });
 
-    if (rawRows.length < 2) {
-      return res.status(400).json({ success: false, message: 'Excel file is empty or has no data rows' });
+    console.log("Total Rows in Excel:", recordsData.length);
+
+    if (recordsData.length < 2) {
+      return res.status(400).json({ success: false, message: 'No data rows found' });
     }
 
-    // ─── Robust header detection with column mapping ────────────────────────────────
-    let headerRowIndex = -1;
-    let columnMap = {};
+    // Material Grades
+    let materialGrades = {};
+    const gradesSheetName = workbook.SheetNames.find(name => 
+      name.toLowerCase().includes('material_grades') || name.toLowerCase().includes('material'));
 
-    for (let i = 0; i < Math.min(12, rawRows.length); i++) {
-      const row = rawRows[i].map(v => String(v || '').trim().toLowerCase().replace(/\s+/g, ' '));
-
-      const tempMap = {};
-      row.forEach((cell, idx) => {
-        if (cell.includes('tc_no')) tempMap.tc_no = idx;
-        if (cell.includes('traceability_no')) tempMap.traceability_no = idx;
-        if (cell.includes('heat_no')) tempMap.heat_no = idx;
-        if (cell.includes('size')) tempMap.size = idx;
-        if (cell.includes('material_grade_id')) tempMap.material_grade_id = idx;
-      });
-
-      // Require at least tc_no + heat_no + size (or material_grade_id)
-      const hasTcOrHeat = tempMap.tc_no !== undefined || tempMap.heat_no !== undefined;
-      const hasSizeOrGrade = tempMap.size !== undefined || tempMap.material_grade_id !== undefined;
-
-      if (hasTcOrHeat && hasSizeOrGrade && Object.keys(tempMap).length >= 3) {
-        headerRowIndex = i;
-        columnMap = tempMap;
-        break;
+    if (gradesSheetName) {
+      const gradesData = XLSX.utils.sheet_to_json(workbook.Sheets[gradesSheetName], { header: 1 });
+      for (let i = 1; i < gradesData.length; i++) {
+        const row = gradesData[i];
+        if (row && row[0] != null && row[1] != null) {
+          materialGrades[String(row[0]).trim()] = String(row[1]).trim();
+        }
       }
     }
 
-    if (headerRowIndex === -1) {
-      console.log('Header detection failed. First few rows:', rawRows.slice(0, 5));
-      return res.status(400).json({
-        success: false,
-        message: 'Could not find header row. Expected columns: tc_no, heat_no, size, material_grade_id'
-      });
-    }
-
-    const dataRows = rawRows.slice(headerRowIndex + 1)
-      .filter(row => row && row.some(cell => cell !== '' && cell != null));
-
-    if (dataRows.length === 0) {
-      return res.status(400).json({ success: false, message: 'No data rows found after header' });
-    }
-
-    // ─── Fetch all material grades and their limits ────────────────────────────────
-    const [gradeData] = await db.query(`
-      SELECT 
-        m.id AS material_grade_id,
-        m.material_grade,
-        l.c_min, l.c_max, l.cr_min, l.cr_max,
-        l.ni_min, l.ni_max, l.mo_min, l.mo_max,
-        l.mn_min, l.mn_max, l.si_min, l.si_max,
-        l.s_min,  l.s_max,  l.p_min,  l.p_max,
-        l.cu_min, l.cu_max, l.fe_min, l.fe_max,
-        l.co_min, l.co_max
-      FROM material_grade_master m
-      LEFT JOIN records_min_max_values l ON m.id = l.material_grade_id
-    `);
-
-    const gradeMap = {};
-    gradeData.forEach(row => {
-      if (row.material_grade_id) {
-        gradeMap[row.material_grade_id] = row;
-      }
-    });
+    console.log("Material Grades Loaded:", Object.keys(materialGrades).length);
 
     const validationResults = [];
+    let validCount = 0;
+    const chemicalComponents = ['c', 'cr', 'ni', 'mo', 'mn', 'si', 's', 'p', 'cu', 'fe', 'co'];
 
-    // ─── Validate each data row using columnMap ────────────────────────────────────
-    dataRows.forEach((row, idx) => {
-      const rowNum = headerRowIndex + idx + 2;
+    const headers = [
+      's.no', 'material_grade_id', 'supplier_no', 'supplier_name',
+      'tc_no', 'traceability_no', 'heat_no', 'size',
+      'c', 'cr', 'ni', 'mo', 'mn', 'si', 's', 'p', 'cu', 'fe', 'co'
+    ];
 
-      // Read values safely using columnMap
-      const material_grade_id_raw = columnMap.material_grade_id !== undefined ? row[columnMap.material_grade_id] : null;
-      const tc_no               = columnMap.tc_no !== undefined ? String(row[columnMap.tc_no] || '').trim() : '';
-      const traceability_no     = columnMap.traceability_no !== undefined ? String(row[columnMap.traceability_no] || '').trim() : '';
-      const heat_no             = columnMap.heat_no !== undefined ? String(row[columnMap.heat_no] || '').trim() : '';
-      const size                = columnMap.size !== undefined ? String(row[columnMap.size] || '').trim() : '';
+    console.log("\n=== ROW-WISE VALIDATION DETAILS ===");
 
-      // Chemical components (assuming they come in order after size)
-      // You can also make this dynamic if needed
-      const chemStart = Math.max(
-        columnMap.size ?? -1,
-        columnMap.heat_no ?? -1,
-        columnMap.tc_no ?? -1,
-        columnMap.traceability_no ?? -1
-      ) + 1;
-
-      const chem = {
-        c:  row[chemStart]     || '',
-        cr: row[chemStart + 1] || '',
-        ni: row[chemStart + 2] || '',
-        mo: row[chemStart + 3] || '',
-        mn: row[chemStart + 4] || '',
-        si: row[chemStart + 5] || '',
-        s:  row[chemStart + 6] || '',
-        p:  row[chemStart + 7] || '',
-        cu: row[chemStart + 8] || '',
-        fe: row[chemStart + 9] || '',
-        co: row[chemStart + 10]|| ''
-      };
-
-      let material_grade_id = null;
-      if (material_grade_id_raw !== '' && !isNaN(Number(material_grade_id_raw))) {
-        material_grade_id = Number(material_grade_id_raw);
-      }
-
+    for (let i = 1; i < recordsData.length; i++) {
+      const row = recordsData[i];
+      const rowData = {};
       const errors = [];
 
-      // Required fields
-      if (!tc_no)             errors.push("TC No is required");
-      if (!heat_no)           errors.push("Heat No is required");
-      if (!size)              errors.push("Size is required");
-      if (material_grade_id === null) errors.push("Valid numeric material_grade_id is required");
+      headers.forEach((key, idx) => {
+        rowData[key] = (row[idx] != null && row[idx] !== '') 
+          ? String(row[idx]).trim() 
+          : '';
+      });
 
-      if (errors.length > 0) {
-        validationResults.push({
-          row: rowNum,
-          message: errors.join(' | '),
-          rowData: { tc_no, traceability_no, heat_no, size, ...chem }
-        });
-        return;
-      }
+      // Required Fields
+      const required = ['material_grade_id', 'supplier_no', 'supplier_name', 
+                       'tc_no', 'traceability_no', 'heat_no', 'size'];
 
-      const gradeInfo = gradeMap[material_grade_id];
-
-      if (!gradeInfo) {
-        validationResults.push({
-          row: rowNum,
-          message: `Material grade ID ${material_grade_id} not found in database`,
-          rowData: { tc_no, traceability_no, heat_no, size, ...chem }
-        });
-        return;
-      }
-
-      // Chemical composition validation
-      const chemErrors = [];
-
-      const checks = [
-        { key: 'c',  val: chem.c,  name: 'C'  },
-        { key: 'cr', val: chem.cr, name: 'Cr' },
-        { key: 'ni', val: chem.ni, name: 'Ni' },
-        { key: 'mo', val: chem.mo, name: 'Mo' },
-        { key: 'mn', val: chem.mn, name: 'Mn' },
-        { key: 'si', val: chem.si, name: 'Si' },
-        { key: 's',  val: chem.s,  name: 'S'  },
-        { key: 'p',  val: chem.p,  name: 'P'  },
-        { key: 'cu', val: chem.cu, name: 'Cu' },
-        { key: 'fe', val: chem.fe, name: 'Fe' },
-        { key: 'co', val: chem.co, name: 'Co' }
-      ];
-
-      checks.forEach(({ key, val, name }) => {
-        if (val === '' || val == null) return;
-
-        const num = parseFloat(val);
-        if (isNaN(num)) {
-          chemErrors.push(`${name}: invalid number (${val})`);
-          return;
-        }
-
-        const min = gradeInfo[`${key}_min`];
-        const max = gradeInfo[`${key}_max`];
-
-        if (min != null && max != null && (num < min || num > max)) {
-          chemErrors.push(`${name}: ${num} is outside allowed range (${min} – ${max})`);
+      required.forEach(field => {
+        if (!rowData[field]) {
+          errors.push(`${field} is required`);
         }
       });
 
-      if (chemErrors.length > 0) {
-        validationResults.push({
-          row: rowNum,
-          message: chemErrors.join(' | '),
-          rowData: { tc_no, traceability_no, heat_no, size, ...chem }
-        });
-      } else {
-        validationResults.push({
-          row: rowNum,
-          message: null,
-          rowData: { tc_no, traceability_no, heat_no, size, ...chem, material_grade: gradeInfo.material_grade }
-        });
+      // Material Grade
+      if (rowData.material_grade_id) {
+        if (!materialGrades[rowData.material_grade_id]) {
+          errors.push(`Invalid material_grade_id: ${rowData.material_grade_id}`);
+        } else {
+          rowData.material_grade = materialGrades[rowData.material_grade_id];
+        }
       }
-    });
 
-    const invalidRows = validationResults.filter(r => r.message);
-    const allValid = invalidRows.length === 0;
+      // Chemical Values
+      chemicalComponents.forEach(comp => {
+        if (rowData[comp]) {
+          const num = parseFloat(rowData[comp]);
+          if (isNaN(num)) {
+            errors.push(`${comp}: invalid number (${rowData[comp]})`);
+          }
+        }
+      });
+
+      const result = {
+        row: i + 1,
+        rowData,
+        message: errors.length ? errors.join(' | ') : '',
+        isValid: errors.length === 0
+      };
+
+      validationResults.push(result);
+      if (result.isValid) validCount++;
+
+      // ==================== CONSOLE LOG FOR EACH ROW ====================
+      console.log(`\nRow ${i + 1}:`);
+      console.log("Data  →", rowData);
+      if (errors.length > 0) {
+        console.log("❌ Errors →", errors);
+      } else {
+        console.log("✅ Status → VALID");
+      }
+    }
+
+    console.log("\n✅ Validation Completed. Valid Rows:", validCount, "Total Rows:", validationResults.length);
 
     res.json({
       success: true,
-      validationResults,
-      totalRows: dataRows.length,
-      validCount: dataRows.length - invalidRows.length,
-      invalidCount: invalidRows.length,
-      allRowsValid: allValid,
-      message: allValid
-        ? 'All rows passed validation — ready to import'
-        : 'Some rows have validation issues — please correct them'
+      totalRows: validationResults.length,
+      validCount,
+      invalidCount: validationResults.length - validCount,
+      allRowsValid: validCount === validationResults.length,
+      validationResults
     });
 
-  } catch (err) {
-    console.error('Bulk validate error:', err);
+  } catch (error) {
+    console.error("💥 CRITICAL ERROR in bulkValidateExcel:");
+    console.error(error.stack || error);
     res.status(500).json({
       success: false,
-      message: 'Server error during validation',
-      error: err.message
+      message: 'Server error while processing Excel file',
+      error: error.message
     });
   }
 };
 
-
-
+// ──────────────────────────────────────────────
+// BULK UPLOAD RECORDS - FINAL CORRECT VERSION
+// ──────────────────────────────────────────────
 exports.bulkuploadrecords = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+    console.log("=== BULK UPLOAD START ===");
 
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No file uploaded or buffer missing' 
+      });
+    }
+
+    const XLSX = require('xlsx');
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('records')) || workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
 
-    const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', blankrows: false });
+    const recordsSheetName = workbook.SheetNames.find(name => 
+      name.toLowerCase() === 'records') || workbook.SheetNames[0];
 
-    let headerRowIndex = 0;
-    while (headerRowIndex < rawRows.length) {
-      const row = rawRows[headerRowIndex].map(v => String(v || '').trim().toLowerCase());
-      if (row.includes('tc_no') || row.includes('heat_no')) break;
-      headerRowIndex++;
+    const worksheet = workbook.Sheets[recordsSheetName];
+    const recordsData = XLSX.utils.sheet_to_json(worksheet, { 
+      header: 1, 
+      defval: null,
+      raw: false 
+    });
+
+    if (recordsData.length < 2) {
+      return res.status(400).json({ success: false, message: 'No data found' });
     }
 
-    if (headerRowIndex >= rawRows.length - 1) {
-      return res.status(400).json({ success: false, message: 'Header row not found' });
-    }
-
-    const dataRows = rawRows.slice(headerRowIndex + 1).filter(r => r.some(c => c !== ''));
-
-    // Fetch grades
-    const [grades] = await db.query(`
-      SELECT m.id AS material_grade_id, m.material_grade,
-             l.c_min, l.c_max, l.cr_min, l.cr_max, l.ni_min, l.ni_max, l.mo_min, l.mo_max,
-             l.mn_min, l.mn_max, l.si_min, l.si_max, l.s_min, l.s_max, l.p_min, l.p_max,
-             l.cu_min, l.cu_max, l.fe_min, l.fe_max, l.co_min, l.co_max
-      FROM material_grade_master m
-      LEFT JOIN records_min_max_values l ON m.id = l.material_grade_id
-    `);
-
-    const gradeMap = {};
-    grades.forEach(g => { if (g.material_grade_id) gradeMap[g.material_grade_id] = g; });
-
-    const validRecords = [];
+    const recordsToInsert = [];
     const validationResults = [];
 
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i];
-      const rowNum = headerRowIndex + i + 2;
+    // Fetch material_grade name from material_grade_master using material_grade_id
+    const [materialGrades] = await db.query(
+      `SELECT id, material_grade FROM material_grade_master`
+    );
 
-      const material_grade_id = Number(row[1]) || null;
-      const tc_no            = String(row[2] || '').trim();
-      const traceability_no  = String(row[3] || '').trim(); // optional
-      const heat_no          = String(row[4] || '').trim();
-      const size             = String(row[5] || '').trim();
+    const gradeMap = {};
+    materialGrades.forEach(row => {
+      gradeMap[row.id] = row.material_grade;
+    });
 
-      const chem = {
-        c: row[6], cr: row[7], ni: row[8], mo: row[9],
-        mn: row[10], si: row[11], s: row[12], p: row[13],
-        cu: row[14], fe: row[15], co: row[16]
-      };
+    console.log(`Loaded ${materialGrades.length} material grades for lookup`);
 
+    for (let i = 1; i < recordsData.length; i++) {
+      const row = recordsData[i];
       const errors = [];
+      const rowData = {};
 
-      if (!tc_no)             errors.push("TC No required");
-      if (!heat_no)           errors.push("Heat No required");
-      if (!size)              errors.push("Size required");
-      if (!material_grade_id || isNaN(material_grade_id)) errors.push("Valid numeric material_grade_id required");
+      const headers = ['s.no','material_grade_id','supplier_no','supplier_name','tc_no',
+                      'traceability_no','heat_no','size','c','cr','ni','mo','mn','si',
+                      's','p','cu','fe','co'];
 
-      if (errors.length > 0) {
-        validationResults.push({ row: rowNum, message: errors.join(' | ') });
-        continue;
-      }
-
-      const grade = gradeMap[material_grade_id];
-      if (!grade) {
-        validationResults.push({ row: rowNum, message: `Grade ID ${material_grade_id} not found` });
-        continue;
-      }
-
-      let chemValid = true;
-      const chemErrors = [];
-
-      [
-        {k:'c', v:chem.c},  {k:'cr',v:chem.cr}, {k:'ni',v:chem.ni}, {k:'mo',v:chem.mo},
-        {k:'mn',v:chem.mn}, {k:'si',v:chem.si}, {k:'s', v:chem.s},  {k:'p', v:chem.p},
-        {k:'cu',v:chem.cu}, {k:'fe',v:chem.fe}, {k:'co',v:chem.co}
-      ].forEach(({k, v}) => {
-        if (v === '' || v == null) return;
-        const num = parseFloat(v);
-        if (isNaN(num)) {
-          chemErrors.push(`${k.toUpperCase()}: invalid number`);
-          chemValid = false;
-          return;
-        }
-        const min = grade[`${k}_min`];
-        const max = grade[`${k}_max`];
-        if (min != null && max != null && (num < min || num > max)) {
-          chemErrors.push(`${k.toUpperCase()}: ${num} out of range (${min}-${max})`);
-          chemValid = false;
-        }
+      headers.forEach((key, idx) => {
+        rowData[key] = row[idx] != null ? String(row[idx]).trim() : '';
       });
 
-      if (!chemValid) {
-        validationResults.push({ row: rowNum, message: chemErrors.join(' | ') });
-        continue;
+      // Required Fields
+      const required = ['material_grade_id','supplier_no','supplier_name','tc_no','traceability_no','heat_no','size'];
+      required.forEach(f => {
+        if (!rowData[f]) errors.push(`${f} is required`);
+      });
+
+      // Get material_grade name from ID
+      let materialGradeName = null;
+      if (rowData.material_grade_id) {
+        materialGradeName = gradeMap[rowData.material_grade_id];
+        if (!materialGradeName) {
+          errors.push(`Invalid material_grade_id: ${rowData.material_grade_id}`);
+        }
+      } else {
+        errors.push('material_grade_id is required');
       }
 
-      validRecords.push([
-        tc_no,
-        heat_no,
-        size,
-        chem.c  ? parseFloat(chem.c)  : null,
-        chem.cr ? parseFloat(chem.cr) : null,
-        chem.ni ? parseFloat(chem.ni) : null,
-        chem.mo ? parseFloat(chem.mo) : null,
-        chem.mn ? parseFloat(chem.mn) : null,
-        chem.si ? parseFloat(chem.si) : null,
-        chem.s  ? parseFloat(chem.s)  : null,
-        chem.p  ? parseFloat(chem.p)  : null,
-        chem.cu ? parseFloat(chem.cu) : null,
-        chem.fe ? parseFloat(chem.fe) : null,
-        chem.co ? parseFloat(chem.co) : null,
-        grade.material_grade,
-        traceability_no || null
-      ]);
+      if (errors.length === 0) {
+        recordsToInsert.push([
+          rowData.tc_no,
+          rowData.traceability_no,
+          rowData.heat_no,
+          rowData.size,
+          rowData.c || null,
+          rowData.cr || null,
+          rowData.ni || null,
+          rowData.mo || null,
+          rowData.mn || null,
+          rowData.si || null,
+          rowData.s || null,
+          rowData.p || null,
+          rowData.cu || null,
+          rowData.fe || null,
+          rowData.co || null,
+          materialGradeName,           // ← material_grade (name)
+          rowData.supplier_no,         // supplier_number
+          rowData.supplier_name
+        ]);
+      }
 
-      validationResults.push({ row: rowNum, message: null });
+      validationResults.push({
+        row: i + 1,
+        rowData,
+        message: errors.join(' | '),
+        isValid: errors.length === 0
+      });
     }
 
-    let inserted = 0;
-    if (validRecords.length > 0) {
-      await db.query(
-        `INSERT INTO records 
-         (tc_no, heat_no, size, c, cr, ni, mo, mn, si, s, p, cu, fe, co, material_grade, traceability_no)
-         VALUES ?`,
-        [validRecords]
-      );
-      inserted = validRecords.length;
+    if (recordsToInsert.length === 0) {
+      return res.json({
+        success: false,
+        message: 'No valid records found to import',
+        validationResults
+      });
     }
+
+    // ====================== FINAL INSERT ======================
+    const [result] = await db.query(
+      `INSERT INTO records 
+       (tc_no, traceability_no, heat_no, size, 
+        c, cr, ni, mo, mn, si, s, p, cu, fe, co, 
+        material_grade, supplier_number, supplier_name) 
+       VALUES ?`,
+      [recordsToInsert]
+    );
+
+    console.log(`✅ Successfully inserted ${recordsToInsert.length} records`);
 
     res.json({
       success: true,
-      insertedCount: inserted,
-      validationResults,
-      totalRows: dataRows.length,
-      validCount: validRecords.length,
-      invalidCount: dataRows.length - validRecords.length
+      message: `Successfully imported ${recordsToInsert.length} record(s)`,
+      insertedCount: recordsToInsert.length,
+      validationResults
     });
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Bulk upload failed', error: err.message });
+  } catch (error) {
+    console.error("💥 Bulk Upload Error:", error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Error during bulk upload',
+      error: error.message
+    });
   }
 };
-
-
-
-
-
-
 
 
 

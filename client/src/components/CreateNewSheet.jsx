@@ -30,7 +30,7 @@ const CreateNewSheet = () => {
 
   const fetchNextCertNumber = async () => {
     try {
-      const res = await fetch('http://136.109.165.80:5000/api/sheet/next-cert-number');
+      const res = await fetch('http://103.118.158.188:5000/api/sheet/next-cert-number');
       const json = await res.json();
       if (json.success && json.nextCertNo) {
         setCertNo(json.nextCertNo);
@@ -195,7 +195,7 @@ const CreateNewSheet = () => {
     setPressureLoading(true);
 
     try {
-      const res = await fetch('http://136.109.165.80:5000/api/sheet/pressures/by-sizes', {
+      const res = await fetch('http://103.118.158.188:5000/api/sheet/pressures/by-sizes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sizes }),
@@ -245,7 +245,7 @@ const CreateNewSheet = () => {
       const params = new URLSearchParams();
       traceabilityList.forEach(t => params.append('traceability_nos', t));
 
-      const res = await fetch(`http://136.109.165.80:5000/api/sheet/records/by-traceabilities?${params.toString()}`);
+      const res = await fetch(`http://103.118.158.188:5000/api/sheet/records/by-traceabilities?${params.toString()}`);
       const json = await res.json();
 
       if (json.success && json.records?.length > 0) {
@@ -309,7 +309,7 @@ const CreateNewSheet = () => {
     }
 
     try {
-      const res = await fetch(`http://136.109.165.80:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
+      const res = await fetch(`http://103.118.158.188:5000/api/sheet/records/by-tc?tc_no=${encodeURIComponent(tcNoValue.trim())}`);
       const json = await res.json();
 
       if (json.success && json.record) {
@@ -515,7 +515,7 @@ const handleSubmitCertificate = async () => {
   });
 
   try {
-    const response = await fetch('http://136.109.165.80:5000/api/sheet/create-certificate', {
+    const response = await fetch('http://103.118.158.188:5000/api/sheet/create-certificate', {
       method: 'POST',
       body: formData,
     });
@@ -558,7 +558,7 @@ const handleSubmitCertificate = async () => {
     setCheckingDeliveryNote(true);
 
     try {
-      const res = await fetch('http://136.109.165.80:5000/api/sheet/check-delivery-note', {
+      const res = await fetch('http://103.118.158.188:5000/api/sheet/check-delivery-note', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ delivery_note_no: deliveryNote.trim() })
